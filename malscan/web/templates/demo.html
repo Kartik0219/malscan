@@ -67,6 +67,9 @@
   .f-malicious { border-left-color: var(--malicious); }
   .f-info { border-left-color: var(--info); }
   .clean-msg { color: var(--clean); font-size: 0.9rem; font-weight: 500; }
+  .result-row { padding: 1rem 0; border-bottom: 1px solid var(--border); }
+  .result-row:first-of-type { padding-top: 0; }
+  .result-row:last-of-type { border-bottom: none; padding-bottom: 0; }
   .disclaimer { color: var(--dim); font-size: 0.74rem; margin-top: 2rem; line-height: 1.7; }
   .disclaimer a { color: var(--muted); }
 </style>
@@ -94,23 +97,27 @@
   </p>
 </div>
 
-{% if result %}
+{% if results %}
 <div class="panel">
-  <h2>Result</h2>
-  <div class="verdict-head">
-    <span class="badge b-{{ result.verdict }}">{{ result.verdict }}</span>
-    <span class="fname">{{ result.path }}</span>
+  <h2>Result{% if results|length > 1 %}s — {{ results|length }} items (archive expanded){% endif %}</h2>
+  {% for result in results %}
+  <div class="result-row">
+    <div class="verdict-head">
+      <span class="badge b-{{ result.verdict }}">{{ result.verdict }}</span>
+      <span class="fname">{{ result.path }}</span>
+    </div>
+    <div class="meta">{{ result.size }} bytes · sha256 {{ result.sha256[:32] }}…</div>
+    {% if result.findings %}
+    <ul class="findings">
+      {% for f in result.findings %}
+      <li class="f-{{ f.severity }}"><span class="eng">{{ f.engine }}</span>{{ f.message }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="clean-msg">✓ No detections from any engine.</p>
+    {% endif %}
   </div>
-  <div class="meta">{{ result.size }} bytes · sha256 {{ result.sha256[:32] }}…</div>
-  {% if result.findings %}
-  <ul class="findings">
-    {% for f in result.findings %}
-    <li class="f-{{ f.severity }}"><span class="eng">{{ f.engine }}</span>{{ f.message }}</li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="clean-msg">✓ No detections from any engine.</p>
-  {% endif %}
+  {% endfor %}
 </div>
 {% endif %}
 

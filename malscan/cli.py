@@ -60,6 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="look up each file's hash on VirusTotal (needs VT_API_KEY env var; "
              "sends only the hash, not the file; free tier is 4 lookups/min)",
     )
+    scan.add_argument(
+        "--no-archives",
+        action="store_true",
+        help="don't scan inside zip/tar/gzip archives (archive members are "
+             "otherwise walked in memory under strict budgets)",
+    )
 
     q = sub.add_parser("quarantine", help="manage the quarantine vault")
     qsub = q.add_subparsers(dest="qcommand", required=True)
@@ -83,7 +89,7 @@ def _cmd_scan(args) -> int:
             print("error: --virustotal requires the VT_API_KEY environment variable", file=sys.stderr)
             return 2
 
-    scanner = Scanner(vt_api_key=vt_key)
+    scanner = Scanner(vt_api_key=vt_key, scan_archives=not args.no_archives)
     status = scanner.engine_status
     print(f"malscan {__version__} | engines: "
           + ", ".join(f"{k}={v}" for k, v in status.items()))
@@ -110,16 +116,21 @@ def _cmd_scan(args) -> int:
                 print(f"           - ({f.engine}) {f.message}")
 
         if quarantine and verdict == Severity.MALICIOUS:
-            try:
-                entry = quarantine.quarantine_file(
-                    result.path,
-                    verdict=verdict.value,
-                    reasons=[f.message for f in result.findings],
-                )
-                quarantined += 1
-                print(f"           -> quarantined as {entry.id}")
-            except OSError as exc:
-                print(f"           -> quarantine failed: {exc}")
+            # Archive members (composed "archive!member" names) aren't real
+            # files on disk, so they can't be quarantined individually.
+            if not Path(result.path).is_file():
+                print("           -> inside archive; quarantine the container instead")
+            else:
+                try:
+                    entry = quarantine.quarantine_file(
+                        result.path,
+                        verdict=verdict.value,
+                        reasons=[f.message for f in result.findings],
+                    )
+                    quarantined += 1
+                    print(f"           -> quarantined as {entry.id}")
+                except OSError as exc:
+                    print(f"           -> quarantine failed: {exc}")
 
     elapsed = time.time() - start
     print(f"\nscanned {len(results)} file(s) in {elapsed:.2f}s")

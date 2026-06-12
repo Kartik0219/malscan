@@ -13,13 +13,31 @@ single verdict per file — entirely offline, no cloud APIs, no telemetry.
 | Engine | Technique | Verdict it can raise |
 |--------|-----------|----------------------|
 | **hash** | SHA-256 / MD5 match against a blocklist | `malicious` |
-| **heuristic** | Shannon entropy (packing/encryption detection) | `suspicious` |
-| **heuristic** | PE header + suspicious-import analysis (`pefile`) | `suspicious` |
+| **heuristic** | Weighted static traits: whole-file & PE-section entropy + risky imports | `suspicious` |
 | **yara** | YARA rule matching (`yara-python`) | per-rule (`suspicious`/`malicious`) |
+| **virustotal** | Opt-in hash lookup against VirusTotal's AV consensus | per-consensus |
 
-The hash and entropy engines are pure stdlib. `pefile` and `yara-python` are
+The hash and heuristic engines are pure stdlib. `pefile` and `yara-python` are
 optional — if they're not installed, those checks degrade gracefully and the
-rest of the scan still runs.
+rest of the scan still runs. Files are also walked **inside archives** (see below).
+
+### Heuristic scoring
+
+The heuristic engine sums *weighted traits* into a risk score in `[0, 1]` and
+only flags `suspicious` once the score crosses a threshold — a single risky
+import won't condemn a file, but several together (or a packed PE section) will.
+Compressed and media formats (zip, gzip, png, jpeg, …) are **exempt** from the
+whole-file entropy check, since they're high-entropy by design; their contents
+are inspected by the archive walker instead.
+
+## Archive scanning
+
+Files inside `.zip`, `.tar` (incl. `.tar.gz`/`.tar.xz`), and bare `.gz` streams
+are scanned too — walked **in memory**, never extracted to disk. This means the
+zip-slip class of bugs can't occur (a member named `../../etc/passwd` is just an
+inert label), and decompression bombs are bounded by explicit budgets (per
+member, total bytes, member count, and nesting depth). Member paths compose with
+`!`, e.g. `bundle.zip!evil.exe`. Disable with `--no-archives`.
 
 ## Install
 
@@ -60,11 +78,12 @@ Each file gets one verdict — the highest severity across all engine findings:
   SHA-256 of the [EICAR test file](https://www.eicar.org/) (a harmless industry
   test string, not real malware) so you can verify the scanner works.
 - **Entropy** flags files whose byte distribution approaches randomness
-  (≥ 7.2 bits/byte), a hallmark of packing or encryption. This is *signal, not
-  proof* — legitimate installers are packed too, so it never condemns alone.
-- **PE analysis** parses Windows executables for imports commonly abused for
-  process injection and anti-debugging (`WriteProcessMemory`,
-  `CreateRemoteThread`, `IsDebuggerPresent`, …).
+  (≥ 7.5 bits/byte), a hallmark of packing or encryption. This is *signal, not
+  proof* — legitimate installers are packed too, so it only contributes weight,
+  never condemns alone, and compressed/media formats are exempt.
+- **PE analysis** parses Windows executables for high-entropy (packed) sections
+  and imports commonly abused for process injection and anti-debugging
+  (`WriteProcessMemory`, `CreateRemoteThread`, `IsDebuggerPresent`, …).
 - **YARA** runs pattern rules from `signatures/yara/`. Drop in curated rule
   feeds (e.g. [signature-base](https://github.com/Neo23x0/signature-base)) to
   expand coverage.

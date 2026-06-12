@@ -29,14 +29,14 @@ def create_demo_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
     scanner = Scanner()
 
-    def _render(result=None, error=None, status=200):
+    def _render(results=None, error=None, status=200):
         return (
             render_template(
                 "demo.html",
                 version=__version__,
                 engine_status=scanner.engine_status,
                 max_mb=MAX_UPLOAD_BYTES // (1024 * 1024),
-                result=result,
+                results=results,
                 error=error,
             ),
             status,
@@ -53,9 +53,10 @@ def create_demo_app() -> Flask:
             return _render(error="Please choose a file to scan.")
         # Read the upload fully into memory (bounded by MAX_CONTENT_LENGTH),
         # scan the bytes, and let them fall out of scope. Nothing hits disk.
+        # iter_results also walks inside archives (zip/tar/gzip) in memory.
         data = uploaded.read()
-        result = scanner.scan_bytes(uploaded.filename, data)
-        return _render(result=result.to_dict())
+        results = [r.to_dict() for r in scanner.iter_results(uploaded.filename, data)]
+        return _render(results=results)
 
     @app.errorhandler(413)
     def too_large(_err):
