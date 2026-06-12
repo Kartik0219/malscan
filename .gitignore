@@ -5,6 +5,8 @@ __pycache__/
 .venv/
 venv/
 *-report.json
+*-report.html
+scan-report.*
 quarantine/
 samples/
 .env

@@ -33,14 +33,17 @@ The core scanner runs with zero dependencies; the extras unlock PE and YARA.
 
 ```bash
 # Scan a single file
-python -m malscan suspicious.exe
+python -m malscan scan suspicious.exe
 
-# Scan a directory (recursive by default), write a JSON report
-python -m malscan ./downloads --json report.json
+# Scan a directory (recursive by default), write JSON + HTML reports
+python -m malscan scan ./downloads --json report.json --html report.html
 
 # Only show suspicious-or-worse, non-recursive
-python -m malscan ./downloads --no-recursive --min-severity suspicious
+python -m malscan scan ./downloads --no-recursive --min-severity suspicious
 ```
+
+The HTML report is a single self-contained file (no external assets) you can
+open in any browser or share — handy for attaching scan results to a ticket.
 
 Exit code is `1` if anything `malicious` is found, else `0` — convenient for
 CI pipelines and pre-commit hooks.
@@ -135,7 +138,7 @@ tier allows 4 lookups/min, so this is best for scanning a handful of files.
 - [x] Quarantine vault (isolate + restore flagged files)
 - [x] Flask web dashboard (themed, Railway-deployable)
 - [x] Optional VirusTotal hash lookups
-- [ ] HTML report output
+- [x] HTML report output
 
 ## License
 

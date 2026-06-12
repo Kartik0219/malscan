@@ -42,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("target", help="file or directory to scan")
     scan.add_argument("--no-recursive", action="store_true", help="don't descend into subdirectories")
     scan.add_argument("--json", dest="json_out", metavar="FILE", help="write full JSON report to FILE")
+    scan.add_argument("--html", dest="html_out", metavar="FILE", help="write a standalone HTML report to FILE")
     scan.add_argument(
         "--min-severity",
         choices=[s.value for s in Severity],
@@ -127,18 +128,24 @@ def _cmd_scan(args) -> int:
     if quarantined:
         print(f"  quarantined: {quarantined}")
 
-    if args.json_out:
+    if args.json_out or args.html_out:
         report = {
             "tool": "malscan",
             "version": __version__,
             "target": args.target,
+            "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "elapsed_seconds": round(elapsed, 3),
             "engine_status": status,
             "summary": {s.value: counts[s] for s in Severity},
             "results": [r.to_dict() for r in results],
         }
-        Path(args.json_out).write_text(json.dumps(report, indent=2), encoding="utf-8")
-        print(f"\nJSON report written to {args.json_out}")
+        if args.json_out:
+            Path(args.json_out).write_text(json.dumps(report, indent=2), encoding="utf-8")
+            print(f"\nJSON report written to {args.json_out}")
+        if args.html_out:
+            from .report import render_html
+            Path(args.html_out).write_text(render_html(report), encoding="utf-8")
+            print(f"HTML report written to {args.html_out}")
 
     return 1 if counts[Severity.MALICIOUS] else 0
 
