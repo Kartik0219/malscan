@@ -67,6 +67,20 @@ def build_parser() -> argparse.ArgumentParser:
              "otherwise walked in memory under strict budgets)",
     )
 
+    tri = sub.add_parser(
+        "triage",
+        help="scan a path, then have Claude explain the findings (needs ANTHROPIC_API_KEY)",
+    )
+    tri.add_argument("target", help="file or directory to scan and triage")
+    tri.add_argument("--no-recursive", action="store_true", help="don't descend into subdirectories")
+    tri.add_argument(
+        "--min-severity",
+        choices=[s.value for s in Severity],
+        default="suspicious",
+        help="triage files at or above this severity (default: suspicious)",
+    )
+    tri.add_argument("--model", default="claude-opus-4-8", help="Claude model ID (default: claude-opus-4-8)")
+
     q = sub.add_parser("quarantine", help="manage the quarantine vault")
     qsub = q.add_subparsers(dest="qcommand", required=True)
     qsub.add_parser("list", help="list quarantined files")
@@ -187,12 +201,49 @@ def _cmd_quarantine(args) -> int:
     return 1
 
 
+def _cmd_triage(args) -> int:
+    from .ai import triage as triage_mod
+
+    min_rank = Severity(args.min_severity).rank
+    scanner = Scanner()
+    print(f"malscan {__version__} | scanning {args.target} for triage…\n")
+
+    results = [
+        r.to_dict()
+        for r in scanner.scan_path(args.target, recursive=not args.no_recursive)
+        if not r.error and r.verdict.rank >= min_rank
+    ]
+    if not results:
+        print(f"Nothing at or above '{args.min_severity}' to triage.")
+        return 0
+
+    if not triage_mod.has_api_key():
+        print("error: triage requires the ANTHROPIC_API_KEY environment variable", file=sys.stderr)
+        return 2
+
+    print(f"Triaging {len(results)} flagged file(s) with {args.model}…\n")
+    try:
+        client = triage_mod.make_client()
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    triage_mod.triage_results(
+        results, client=client, model=args.model,
+        echo=lambda s: print(s, end="", flush=True),
+    )
+    print()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "scan":
         return _cmd_scan(args)
     if args.command == "quarantine":
         return _cmd_quarantine(args)
+    if args.command == "triage":
+        return _cmd_triage(args)
     return 1
 
 

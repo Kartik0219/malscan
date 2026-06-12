@@ -152,12 +152,31 @@ tier allows 4 lookups/min, so this is best for scanning a handful of files.
 > leak the API key and exhaust the rate limit on visitors' uploads. It's
 > CLI-only and off unless you pass `--virustotal` with a key present.
 
+## AI triage (optional)
+
+Have Claude turn malscan's findings into a plain-English analyst writeup —
+what each detection likely means, how much to trust it, and what to do next.
+
+```bash
+pip install anthropic
+export ANTHROPIC_API_KEY=sk-ant-...        # PowerShell: $env:ANTHROPIC_API_KEY="sk-ant-..."
+python -m malscan triage ./downloads       # triages suspicious-or-worse files
+```
+
+**Privacy by design** (same discipline as the VirusTotal engine): triage sends
+only scan *metadata* — verdicts, engine findings, rule names, entropy scores,
+hashes, and the file's basename. **The file's contents are never sent**, and
+full filesystem paths are stripped to basenames before leaving your machine.
+Uses the Anthropic SDK with `claude-opus-4-8` and adaptive thinking, streamed
+to your terminal. Opt-in and CLI-only — never wired into the public web demo.
+
 ## Roadmap
 
 - [x] Quarantine vault (isolate + restore flagged files)
 - [x] Flask web dashboard (themed, Railway-deployable)
 - [x] Optional VirusTotal hash lookups
 - [x] HTML report output
+- [x] AI triage of findings (Claude)
 
 ## License
 
