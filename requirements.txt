@@ -1,0 +1,8 @@
+# Core scanner has zero hard dependencies (stdlib only).
+# Optional extras unlock deeper detection:
+pefile>=2023.2.7    # PE import/header analysis
+yara-python>=4.3.0  # YARA rule matching
+
+# Web dashboard + public demo:
+flask>=3.0
+gunicorn>=21.0    # production WSGI server (Railway)

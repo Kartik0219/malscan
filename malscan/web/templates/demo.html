@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>malscan — live demo</title>
+<meta name="description" content="Live demo of malscan, a local malware scanner combining hash, entropy, PE and YARA detection. Upload a file to see it analysed.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #2b2b2b; --surface: #323232; --card: #383838; --card-h: #404040;
+    --border: rgba(255,255,255,.08); --border-h: rgba(255,107,53,.24);
+    --text: #f2f2f2; --muted: #8a8a8a; --dim: #555;
+    --orange: #ff6b35; --orange-lt: #ff8656; --og: rgba(255,107,53,.13);
+    --radius: 10px;
+    --clean: #4caf72; --info: #4aa3c7; --suspicious: #e0a528; --malicious: #e0483f;
+  }
+  body {
+    font-family: 'Inter', -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
+    padding: 2.5rem 1.5rem 4rem; max-width: 760px; margin: 0 auto; line-height: 1.5;
+  }
+  header { margin-bottom: 1.8rem; }
+  h1 { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; }
+  h1 span { color: var(--orange); }
+  .sub { color: var(--muted); font-size: 0.9rem; margin-top: 0.35rem; }
+  .engines { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.9rem; }
+  .chip { font-size: 0.72rem; font-weight: 600; padding: 0.2rem 0.7rem; border-radius: 999px;
+          background: var(--card); border: 1px solid var(--border); color: var(--muted); }
+  .chip b { color: var(--orange-lt); font-weight: 700; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+           padding: 1.5rem; margin-bottom: 1.4rem; }
+  h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--orange-lt);
+       margin-bottom: 1rem; font-weight: 700; }
+  form { display: flex; gap: 0.7rem; flex-wrap: wrap; align-items: center; }
+  input[type=file] { flex: 1; min-width: 220px; font-size: 0.88rem; color: var(--muted);
+       background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 0.55rem 0.7rem; }
+  input[type=file]::file-selector-button { background: var(--surface); color: var(--orange-lt);
+       border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.8rem; margin-right: 0.8rem;
+       font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+  button { background: var(--orange); color: #1a1a1a; border: none; border-radius: 7px;
+       padding: 0.6rem 1.5rem; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+  button:hover { background: var(--orange-lt); }
+  .hint { color: var(--muted); font-size: 0.8rem; margin-top: 0.9rem; }
+  .hint code { background: var(--surface); padding: 0.1rem 0.4rem; border-radius: 4px;
+       font-family: ui-monospace, "Cascadia Code", monospace; font-size: 0.78rem; color: var(--orange-lt); }
+  .error { background: rgba(224,72,63,.13); color: #ff8a82; border: 1px solid rgba(224,72,63,.3);
+       padding: 0.7rem 1rem; border-radius: 8px; margin-bottom: 1.4rem; font-size: 0.85rem; font-weight: 500; }
+  .verdict-head { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
+  .badge { display: inline-block; padding: 0.25rem 0.9rem; border-radius: 999px; font-size: 0.82rem; font-weight: 800;
+       text-transform: uppercase; letter-spacing: 0.03em; }
+  .b-clean { background: rgba(76,175,114,.15); color: var(--clean); }
+  .b-info { background: rgba(74,163,199,.15); color: var(--info); }
+  .b-suspicious { background: rgba(224,165,40,.15); color: var(--suspicious); }
+  .b-malicious { background: rgba(224,72,63,.15); color: var(--malicious); }
+  .fname { font-family: ui-monospace, monospace; font-size: 0.85rem; word-break: break-all; }
+  .meta { color: var(--muted); font-size: 0.78rem; margin-bottom: 1rem; font-family: ui-monospace, monospace; }
+  .findings { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .findings li { background: var(--surface); border-left: 3px solid var(--border); padding: 0.6rem 0.9rem;
+       border-radius: 0 7px 7px 0; font-size: 0.85rem; }
+  .findings li .eng { color: var(--orange-lt); font-weight: 700; font-size: 0.72rem; text-transform: uppercase;
+       letter-spacing: 0.04em; margin-right: 0.5rem; }
+  .f-suspicious { border-left-color: var(--suspicious); }
+  .f-malicious { border-left-color: var(--malicious); }
+  .f-info { border-left-color: var(--info); }
+  .clean-msg { color: var(--clean); font-size: 0.9rem; font-weight: 500; }
+  .disclaimer { color: var(--dim); font-size: 0.74rem; margin-top: 2rem; line-height: 1.7; }
+  .disclaimer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>mal<span>scan</span> <span style="font-size:0.9rem;font-weight:600;color:var(--muted)">live demo</span></h1>
+  <p class="sub">Upload a file — it's scanned in memory with hash, entropy, PE and YARA engines, then discarded.</p>
+  <div class="engines">
+    {% for name, st in engine_status.items() %}<span class="chip">{{ name }} <b>{{ st }}</b></span>{% endfor %}
+  </div>
+</header>
+
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<div class="panel">
+  <h2>Scan a file</h2>
+  <form method="post" action="/scan" enctype="multipart/form-data">
+    <input type="file" name="file" required>
+    <button type="submit">Scan</button>
+  </form>
+  <p class="hint">
+    Try the harmless <a href="https://www.eicar.org/download-anti-malware-testfile/" target="_blank" rel="noopener" style="color:var(--orange-lt)">EICAR test file</a>,
+    or paste the test string <code>X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*</code> into a <code>.txt</code> and upload it.
+  </p>
+</div>
+
+{% if result %}
+<div class="panel">
+  <h2>Result</h2>
+  <div class="verdict-head">
+    <span class="badge b-{{ result.verdict }}">{{ result.verdict }}</span>
+    <span class="fname">{{ result.path }}</span>
+  </div>
+  <div class="meta">{{ result.size }} bytes · sha256 {{ result.sha256[:32] }}…</div>
+  {% if result.findings %}
+  <ul class="findings">
+    {% for f in result.findings %}
+    <li class="f-{{ f.severity }}"><span class="eng">{{ f.engine }}</span>{{ f.message }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="clean-msg">✓ No detections from any engine.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<p class="disclaimer">
+  This is a portfolio demonstration of <b>malscan</b>, an educational on-demand
+  scanner — not a substitute for real antivirus. Uploaded files are scanned in
+  memory and never stored. Detection is illustrative and will miss real-world
+  threats. Source: github.com/Kartik0219.
+</p>
+</body>
+</html>
