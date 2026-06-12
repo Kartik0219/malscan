@@ -109,11 +109,32 @@ pip install flask
 python serve.py        # http://127.0.0.1:5060
 ```
 
+## VirusTotal lookup (optional)
+
+Cross-reference each file against [VirusTotal's](https://www.virustotal.com)
+aggregated antivirus verdicts. It's **opt-in** and **privacy-preserving**: only
+the file's SHA-256 **hash** is sent, never its contents. If VT has never seen the
+hash, nothing about your file is disclosed.
+
+```bash
+# Get a free API key at virustotal.com, then:
+export VT_API_KEY=your_key_here          # PowerShell: $env:VT_API_KEY="your_key_here"
+python -m malscan scan ./downloads --virustotal
+```
+
+Verdicts map from VT's engine consensus: ≥3 engines malicious → `malicious`,
+1–2 → `suspicious`, known-but-clean → `info`, unknown → no finding. The free
+tier allows 4 lookups/min, so this is best for scanning a handful of files.
+
+> The VirusTotal engine is **never** enabled in the public web demo — it would
+> leak the API key and exhaust the rate limit on visitors' uploads. It's
+> CLI-only and off unless you pass `--virustotal` with a key present.
+
 ## Roadmap
 
 - [x] Quarantine vault (isolate + restore flagged files)
 - [x] Flask web dashboard (themed, Railway-deployable)
-- [ ] Optional VirusTotal / MalwareBazaar hash lookups
+- [x] Optional VirusTotal hash lookups
 - [ ] HTML report output
 
 ## License

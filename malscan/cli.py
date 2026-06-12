@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -52,6 +53,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="move files with a 'malicious' verdict into the quarantine vault",
     )
+    scan.add_argument(
+        "--virustotal",
+        action="store_true",
+        help="look up each file's hash on VirusTotal (needs VT_API_KEY env var; "
+             "sends only the hash, not the file; free tier is 4 lookups/min)",
+    )
 
     q = sub.add_parser("quarantine", help="manage the quarantine vault")
     qsub = q.add_subparsers(dest="qcommand", required=True)
@@ -68,7 +75,14 @@ def _cmd_scan(args) -> int:
     use_color = sys.stdout.isatty()
     min_rank = Severity(args.min_severity).rank
 
-    scanner = Scanner()
+    vt_key = None
+    if args.virustotal:
+        vt_key = os.environ.get("VT_API_KEY") or os.environ.get("MALSCAN_VT_API_KEY")
+        if not vt_key:
+            print("error: --virustotal requires the VT_API_KEY environment variable", file=sys.stderr)
+            return 2
+
+    scanner = Scanner(vt_api_key=vt_key)
     status = scanner.engine_status
     print(f"malscan {__version__} | engines: "
           + ", ".join(f"{k}={v}" for k, v in status.items()))

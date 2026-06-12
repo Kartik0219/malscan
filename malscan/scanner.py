@@ -20,7 +20,12 @@ def _signatures_dir() -> Path:
 
 
 class Scanner:
-    def __init__(self, signatures_dir: Path | None = None, max_size: int = DEFAULT_MAX_SIZE):
+    def __init__(
+        self,
+        signatures_dir: Path | None = None,
+        max_size: int = DEFAULT_MAX_SIZE,
+        vt_api_key: str | None = None,
+    ):
         sig = signatures_dir or _signatures_dir()
         self.max_size = max_size
         self.hash_engine = HashEngine(sig / "hash_blocklist.txt")
@@ -28,13 +33,24 @@ class Scanner:
         self.yara_engine = YaraEngine(sig / "yara")
         self._engines = [self.hash_engine, self.heuristic_engine, self.yara_engine]
 
+        # VirusTotal is opt-in: only added when a key is supplied. The public
+        # web demo constructs Scanner() with no key, so it never phones home.
+        self.vt_engine = None
+        if vt_api_key:
+            from .engines.virustotal import VirusTotalEngine
+            self.vt_engine = VirusTotalEngine(vt_api_key)
+            self._engines.append(self.vt_engine)
+
     @property
     def engine_status(self) -> dict[str, str]:
-        return {
+        status = {
             "hash": "ready",
             "heuristic": "ready",
             "yara": self.yara_engine.status,
         }
+        if self.vt_engine is not None:
+            status["virustotal"] = "ready"
+        return status
 
     def scan_bytes(self, name: str, data: bytes) -> FileResult:
         """Run every engine against in-memory bytes. Touches no filesystem path.
