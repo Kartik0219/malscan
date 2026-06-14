@@ -26,10 +26,8 @@ jobs:
             sep: ":"
             out: malscan
             artifact: malscan-macos-arm64
-          - os: macos-13          # Intel (x86_64)
-            sep: ":"
-            out: malscan
-            artifact: malscan-macos-x64
+          # Intel macOS (macos-13) intentionally omitted for now: the free-tier
+          # Intel runner queue is unreliable. arm64 covers Macs from late 2020+.
     steps:
       - uses: actions/checkout@v4
 
