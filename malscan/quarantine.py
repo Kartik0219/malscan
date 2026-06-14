@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ._paths import user_data_root
+
 # Fixed XOR key — purely to render the stored blob non-executable, not a secret.
 _XOR_KEY = b"malscan-quarantine-v1"
 
@@ -29,7 +31,7 @@ def _xor(data: bytes, key: bytes = _XOR_KEY) -> bytes:
 
 
 def _default_vault() -> Path:
-    return Path(__file__).resolve().parent.parent / "quarantine"
+    return user_data_root() / "quarantine"
 
 
 @dataclass

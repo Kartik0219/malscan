@@ -41,6 +41,22 @@ inert label), and decompression bombs are bounded by explicit budgets (per
 member, total bytes, member count, and nesting depth). Member paths compose with
 `!`, e.g. `bundle.zip!evil.exe`. Disable with `--no-archives`.
 
+## Download (Windows & macOS)
+
+Prebuilt binaries are on the [**Releases**](https://github.com/Kartik0219/malscan/releases) page — no Python required:
+
+| Platform | File |
+|----------|------|
+| Windows 10/11 (x64) | `malscan-windows-x64.exe` |
+| macOS (Apple Silicon) | `malscan-macos-arm64` |
+| macOS (Intel) | `malscan-macos-x64` |
+
+- **Double-click** to open the dashboard in your browser, **or** run it from a terminal as the CLI: `malscan-windows-x64.exe scan <file>`.
+- The binaries are **unsigned**, so the OS shows a one-time warning:
+  - **Windows:** SmartScreen → *More info* → *Run anyway*.
+  - **macOS:** right-click → *Open* (or `xattr -d com.apple.quarantine ./malscan-macos-arm64 && chmod +x ./malscan-macos-arm64`).
+- Some antivirus engines may flag a PyInstaller binary (ironic for a scanner) — it's a false positive; install from source below to avoid it.
+
 ## Install
 
 ```bash

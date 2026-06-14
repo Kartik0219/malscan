@@ -10,3 +10,9 @@ scan-report.*
 quarantine/
 samples/
 .env
+
+# Build artifacts (PyInstaller + local build venv)
+.build-venv/
+build/
+dist/
+*.spec

@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
 from .. import __version__
+from .._paths import resource_root
 from ..models import Severity
 from ..quarantine import Quarantine
 from ..scanner import Scanner
 
 
 def create_app(vault_dir: Path | None = None) -> Flask:
-    app = Flask(__name__)
+    template_folder = "templates"  # Flask's default, relative to this module
+    if getattr(sys, "frozen", False):
+        # In a PyInstaller bundle, templates are unpacked under sys._MEIPASS.
+        template_folder = str(resource_root() / "malscan" / "web" / "templates")
+    app = Flask(__name__, template_folder=template_folder)
     app.secret_key = "malscan-local-dashboard"  # local-only UI; not security-sensitive
     scanner = Scanner()
     quarantine = Quarantine(vault_dir)

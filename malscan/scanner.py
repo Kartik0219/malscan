@@ -11,6 +11,7 @@ from .engines.hashes import HashEngine
 from .engines.heuristics import HeuristicEngine
 from .engines.yara_engine import YaraEngine
 from .models import FileResult, Finding, Severity
+from ._paths import resource_root
 
 # Skip files larger than this to keep scans fast and memory-bounded (bytes).
 DEFAULT_MAX_SIZE = 100 * 1024 * 1024  # 100 MB
@@ -23,7 +24,7 @@ ARCHIVE_MAX_TOTAL_BYTES = 64 * 1024 * 1024  # 64 MB
 
 
 def _signatures_dir() -> Path:
-    return Path(__file__).resolve().parent.parent / "signatures"
+    return resource_root() / "signatures"
 
 
 class Scanner:
