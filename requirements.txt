@@ -5,7 +5,7 @@ yara-python>=4.3.0  # YARA rule matching
 
 # Web dashboard + public demo:
 flask>=3.0
-gunicorn>=21.0    # production WSGI server (Railway)
+gunicorn>=21.0    # production WSGI server (Render)
 
 # AI triage (optional — `malscan triage`):
 anthropic>=0.40   # Claude SDK; needs ANTHROPIC_API_KEY at runtime

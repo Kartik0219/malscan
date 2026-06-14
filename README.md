@@ -3,6 +3,8 @@
 A local, on-demand malware scanner. Combines four detection techniques into a
 single verdict per file — entirely offline, no cloud APIs, no telemetry.
 
+**Live demo:** <https://malscan.onrender.com> — a safe, upload-only public build (the full local dashboard is CLI-only).
+
 > **Scope note:** malscan is an *on-demand* scanner (you point it at files), not
 > a real-time antivirus with kernel hooks. It's a focused, ClamAV-style tool —
 > built to be genuinely useful and to demonstrate how detection engines work,
@@ -173,7 +175,7 @@ to your terminal. Opt-in and CLI-only — never wired into the public web demo.
 ## Roadmap
 
 - [x] Quarantine vault (isolate + restore flagged files)
-- [x] Flask web dashboard (themed, Railway-deployable)
+- [x] Flask web dashboard (themed, Render-deployable)
 - [x] Optional VirusTotal hash lookups
 - [x] HTML report output
 - [x] AI triage of findings (Claude)

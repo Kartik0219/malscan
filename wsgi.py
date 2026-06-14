@@ -1,4 +1,4 @@
-"""WSGI entrypoint for production deployment (Railway/gunicorn).
+"""WSGI entrypoint for production deployment (Render/gunicorn).
 
 Serves the PUBLIC, deploy-safe demo app (upload-based, no filesystem access,
 no quarantine) - never the full local dashboard.
