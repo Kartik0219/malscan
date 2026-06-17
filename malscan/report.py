@@ -11,6 +11,8 @@ from __future__ import annotations
 import html
 import time
 
+from . import attack
+
 # Worst-first ordering so the most important rows sit at the top.
 _SEV_ORDER = ["malicious", "suspicious", "info", "clean"]
 _SEV_COLORS = {
@@ -44,6 +46,14 @@ def _row(result: dict) -> str:
             for f in findings
         )
         parts.append(f'<ul class="findings">{items}</ul>')
+    techs = result.get("techniques") or []
+    if techs:
+        badges = "".join(
+            f'<a class="attck" href="{html.escape(attack.url(t))}" '
+            f'target="_blank" rel="noopener">{html.escape(attack.label(t))}</a>'
+            for t in techs
+        )
+        parts.append(f'<div class="attcks">{badges}</div>')
     detail = "".join(parts)
     sha = result.get("sha256") or ""
     sha_disp = f"{html.escape(sha[:16])}…" if sha else "—"
@@ -127,6 +137,10 @@ def render_html(report: dict) -> str:
   .eng {{ color:var(--orange-lt); font-weight:700; font-size:.68rem; text-transform:uppercase;
     letter-spacing:.04em; margin-right:.5rem; }}
   .err {{ color:#ff8a82; font-size:.8rem; margin-top:.3rem; }}
+  .attcks {{ margin-top:.5rem; display:flex; gap:.35rem; flex-wrap:wrap; }}
+  .attck {{ font-size:.68rem; font-weight:700; text-decoration:none; padding:.12rem .5rem; border-radius:5px;
+    background:rgba(255,107,53,.12); color:var(--orange-lt); border:1px solid rgba(255,107,53,.25); }}
+  .attck:hover {{ border-color:var(--orange); }}
   .empty {{ color:var(--muted); text-align:center; padding:1.2rem; }}
   footer {{ color:#555; font-size:.74rem; margin-top:2rem; }}
 </style>

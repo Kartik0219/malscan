@@ -7,7 +7,7 @@ from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
-from .. import __version__
+from .. import __version__, attack
 from .._paths import resource_root
 from ..models import Severity
 from ..quarantine import Quarantine
@@ -27,6 +27,8 @@ def create_app(vault_dir: Path | None = None) -> Flask:
     app = Flask(__name__, template_folder=template_folder)
     app.secret_key = "malscan-local-dashboard"  # local-only UI; not security-sensitive
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+    app.jinja_env.globals["attack_label"] = attack.label
+    app.jinja_env.globals["attack_url"] = attack.url
     scanner = Scanner()
     quarantine = Quarantine(vault_dir)
 

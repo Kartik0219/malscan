@@ -22,6 +22,7 @@ rule Suspicious_PowerShell_Download_Exec
     meta:
         description = "PowerShell download-and-execute one-liner pattern"
         severity    = "suspicious"
+        attack      = "T1059.001, T1105"
     strings:
         $dl1 = "DownloadString" nocase
         $dl2 = "DownloadFile" nocase
@@ -37,6 +38,7 @@ rule Embedded_Windows_Executable_In_Script
     meta:
         description = "Base64-looking MZ/PE header embedded in a text/script file"
         severity    = "suspicious"
+        attack      = "T1027"
     strings:
         $mz_b64 = "TVqQAA"   // base64 of "MZ\x90\x00"
         $mz_b64b = "TVpQAA"

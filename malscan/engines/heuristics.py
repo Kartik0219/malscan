@@ -72,6 +72,19 @@ SUSPICIOUS_IMPORTS: dict[str, float] = {
     "winexec": 0.10,             # legacy process launch
 }
 
+#: MITRE ATT&CK technique each suspicious import maps to (see malscan/attack.py).
+IMPORT_TECHNIQUES: dict[str, str] = {
+    "createremotethread": "T1055",      # Process Injection
+    "writeprocessmemory": "T1055",
+    "virtualallocex": "T1055",
+    "setwindowshookexa": "T1056.001",   # Keylogging
+    "setwindowshookexw": "T1056.001",
+    "urldownloadtofilea": "T1105",      # Ingress Tool Transfer
+    "urldownloadtofilew": "T1105",
+    "isdebuggerpresent": "T1622",       # Debugger Evasion
+    "winexec": "T1059",                 # Command and Scripting Interpreter
+}
+
 
 class Trait(NamedTuple):
     """One observed suspicious trait and its contribution to the score."""
@@ -79,6 +92,7 @@ class Trait(NamedTuple):
     name: str
     weight: float
     description: str
+    technique: str | None = None  # MITRE ATT&CK technique ID, if applicable
 
 
 def shannon_entropy(data: bytes) -> float:
@@ -121,6 +135,7 @@ class HeuristicEngine:
                 message=f"Static traits (risk {score:.2f}/1.0): "
                         + "; ".join(t.description for t in traits),
                 detail={"score": round(score, 2), "traits": [t.name for t in traits]},
+                techniques=sorted({t.technique for t in traits if t.technique}),
             )
         ]
 
@@ -133,7 +148,7 @@ class HeuristicEngine:
         entropy = shannon_entropy(data)
         if entropy >= WHOLE_FILE_ENTROPY_THRESHOLD:
             return [
-                Trait("high-entropy", 0.5, f"high overall entropy ({entropy:.2f}/8.00)")
+                Trait("high-entropy", 0.5, f"high overall entropy ({entropy:.2f}/8.00)", "T1027")
             ]
         return []
 
@@ -169,6 +184,7 @@ class HeuristicEngine:
             return Trait(
                 "packed-section", 0.4,
                 f"high-entropy PE section {worst_name!r} ({worst_entropy:.2f}/8.00)",
+                "T1027.002",
             )
         return None
 
@@ -187,7 +203,11 @@ class HeuristicEngine:
         """Map imported symbols onto the suspicious-import weight table."""
         traits: list[Trait] = []
         for original in import_names:
-            weight = SUSPICIOUS_IMPORTS.get(original.lower())
+            key = original.lower()
+            weight = SUSPICIOUS_IMPORTS.get(key)
             if weight is not None:
-                traits.append(Trait(f"import:{original}", weight, f"suspicious import {original}"))
+                traits.append(Trait(
+                    f"import:{original}", weight, f"suspicious import {original}",
+                    IMPORT_TECHNIQUES.get(key),
+                ))
         return traits

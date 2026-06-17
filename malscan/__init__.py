@@ -5,4 +5,4 @@ and YARA rule matching into a single verdict per file. Detection logic is
 entirely local: no external API calls, no cloud dependencies.
 """
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"

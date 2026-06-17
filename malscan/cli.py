@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import __version__
+from . import __version__, attack
 from .models import Severity
 from .quarantine import Quarantine
 from .scanner import Scanner
@@ -128,6 +128,9 @@ def _cmd_scan(args) -> int:
             print(f"  [{label}] {result.path}")
             for f in result.findings:
                 print(f"           - ({f.engine}) {f.message}")
+            if result.techniques:
+                print("           ATT&CK: "
+                      + ", ".join(attack.label(t) for t in result.techniques))
 
         if quarantine and verdict == Severity.MALICIOUS:
             # Archive members (composed "archive!member" names) aren't real
@@ -162,6 +165,9 @@ def _cmd_scan(args) -> int:
             "elapsed_seconds": round(elapsed, 3),
             "engine_status": status,
             "summary": {s.value: counts[s] for s in Severity},
+            "attack_techniques": attack.enrich(
+                sorted({t for r in results for t in r.techniques})
+            ),
             "results": [r.to_dict() for r in results],
         }
         if args.json_out:

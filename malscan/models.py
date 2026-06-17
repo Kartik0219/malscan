@@ -29,6 +29,7 @@ class Finding:
     severity: Severity
     message: str
     detail: dict[str, Any] = field(default_factory=dict)
+    techniques: list[str] = field(default_factory=list)  # MITRE ATT&CK IDs, e.g. ["T1027"]
 
 
 @dataclass
@@ -48,9 +49,18 @@ class FileResult:
             return Severity.CLEAN
         return max((f.severity for f in self.findings), key=lambda s: s.rank)
 
+    @property
+    def techniques(self) -> list[str]:
+        """Unique MITRE ATT&CK technique IDs across all findings, sorted."""
+        seen: set[str] = set()
+        for f in self.findings:
+            seen.update(f.techniques)
+        return sorted(seen)
+
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["verdict"] = self.verdict.value
+        d["techniques"] = self.techniques
         for finding in d["findings"]:
             finding["severity"] = (
                 finding["severity"].value

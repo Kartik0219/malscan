@@ -195,6 +195,7 @@ to your terminal. Opt-in and CLI-only — never wired into the public web demo.
 - [x] Optional VirusTotal hash lookups
 - [x] HTML report output
 - [x] AI triage of findings (Claude)
+- [x] MITRE ATT&CK technique tagging on findings (CLI, reports, dashboard)
 
 ## License
 

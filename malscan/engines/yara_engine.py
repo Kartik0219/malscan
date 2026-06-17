@@ -7,9 +7,18 @@ degrades gracefully to a no-op rather than breaking the whole scan.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from ..models import Finding, Severity
+
+#: Matches MITRE ATT&CK technique IDs like ``T1059`` or ``T1059.001``.
+_ATTACK_ID = re.compile(r"T\d{4}(?:\.\d{3})?")
+
+
+def _parse_attack(value: str) -> list[str]:
+    """Pull ATT&CK technique IDs out of a YARA rule's ``attack`` meta string."""
+    return _ATTACK_ID.findall(value or "")
 
 
 class YaraEngine:
@@ -65,6 +74,7 @@ class YaraEngine:
                         "tags": list(match.tags),
                         "description": match.meta.get("description", ""),
                     },
+                    techniques=_parse_attack(match.meta.get("attack", "")),
                 )
             )
         return findings

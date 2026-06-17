@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from flask import Flask, render_template, request
 
-from .. import __version__
+from .. import __version__, attack
 from ..scanner import Scanner
 
 # Cap request bodies so a hostile upload can't exhaust container memory.
@@ -27,6 +27,8 @@ MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # 8 MB
 def create_demo_app() -> Flask:
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+    app.jinja_env.globals["attack_label"] = attack.label
+    app.jinja_env.globals["attack_url"] = attack.url
     scanner = Scanner()
 
     def _render(results=None, error=None, status=200):

@@ -64,6 +64,10 @@
   .path { font-family: ui-monospace, "Cascadia Code", monospace; font-size: 0.8rem; word-break: break-all; }
   .findings { color: var(--muted); font-size: 0.78rem; margin-top: 0.3rem; }
   .findings li { margin-left: 1rem; }
+  .attcks { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.4rem; }
+  .attck { font-size: 0.68rem; font-weight: 700; text-decoration: none; padding: 0.12rem 0.5rem; border-radius: 5px;
+           background: rgba(255,107,53,.12); color: var(--orange-lt); border: 1px solid rgba(255,107,53,.25); }
+  .attck:hover { border-color: var(--orange); }
   .empty { color: var(--muted); font-size: 0.85rem; }
   .id { font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--orange-lt); }
   .disclaimer { color: var(--dim); font-size: 0.72rem; margin-top: 2rem; line-height: 1.6; }
@@ -151,6 +155,11 @@
           <ul class="findings">
             {% for f in r.findings %}<li>({{ f.engine }}) {{ f.message }}</li>{% endfor %}
           </ul>
+          {% endif %}
+          {% if r.techniques %}
+          <div class="attcks">
+            {% for t in r.techniques %}<a class="attck" href="{{ attack_url(t) }}" target="_blank" rel="noopener">{{ attack_label(t) }}</a>{% endfor %}
+          </div>
           {% endif %}
         </td>
       </tr>
