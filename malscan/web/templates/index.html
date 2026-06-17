@@ -67,6 +67,29 @@
   .empty { color: var(--muted); font-size: 0.85rem; }
   .id { font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--orange-lt); }
   .disclaimer { color: var(--dim); font-size: 0.72rem; margin-top: 2rem; line-height: 1.6; }
+  /* upload / drag-drop */
+  .or { text-align: center; color: var(--dim); font-size: 0.72rem; text-transform: uppercase;
+        letter-spacing: 0.1em; margin: 1.1rem 0 0.9rem; }
+  .dropzone { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; text-align: center;
+        padding: 1.5rem; cursor: pointer; border: 1.5px dashed var(--border); border-radius: 9px;
+        background: var(--surface); transition: border-color .2s, background .2s; }
+  .dropzone:hover, .dropzone.drag { border-color: var(--orange); background: var(--og); }
+  .dropzone:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+  .dropzone.drag { transform: scale(1.005); }
+  .dz-ic { font-size: 1.5rem; color: var(--orange); line-height: 1; }
+  .dz-main { font-size: 0.9rem; color: var(--text); }
+  .dz-link { color: var(--orange-lt); font-weight: 600; text-decoration: underline; }
+  .dz-sub { font-size: 0.74rem; color: var(--muted); }
+  /* scanning overlay */
+  .scan-overlay { position: fixed; inset: 0; z-index: 50; display: none;
+        flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+        background: rgba(20,20,20,.72); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+  body.scanning .scan-overlay { display: flex; }
+  .spinner { width: 38px; height: 38px; border-radius: 50%;
+        border: 3px solid rgba(255,107,53,.25); border-top-color: var(--orange); animation: spin .8s linear infinite; }
+  .scan-overlay p { color: var(--text); font-size: 0.9rem; font-weight: 600; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
 </style>
 </head>
 <body>
@@ -87,11 +110,22 @@
 {% endwith %}
 
 <div class="panel">
-  <h2>Scan</h2>
-  <form class="scan" method="post" action="/scan">
+  <h2>Scan a path</h2>
+  <form class="scan" method="post" action="/scan" id="path-form">
     <input type="text" name="target" placeholder="C:\path\to\file-or-folder" value="{{ target }}" autofocus>
     <label class="check"><input type="checkbox" name="quarantine" value="1"> auto-quarantine malicious</label>
     <button type="submit">Scan</button>
+  </form>
+
+  <div class="or">or scan a single file</div>
+
+  <form method="post" action="/scan-file" enctype="multipart/form-data" id="file-form">
+    <label class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose or drop a file to scan">
+      <input type="file" name="file" id="file-input" hidden>
+      <span class="dz-ic" aria-hidden="true">&#8593;</span>
+      <span class="dz-main">Drag &amp; drop a file here, or <span class="dz-link">browse</span></span>
+      <span class="dz-sub">Scanned in memory{% if max_mb %} &middot; up to {{ max_mb }} MB{% endif %}</span>
+    </label>
   </form>
 </div>
 
@@ -164,5 +198,50 @@
   not a replacement for real-time antivirus. Restoring a quarantined file
   returns the original bytes to disk; only do so if you trust the file.
 </p>
+<div class="scan-overlay" aria-hidden="true">
+  <div class="spinner"></div>
+  <p>Scanning&hellip;</p>
+</div>
+
+<script>
+  (function () {
+    var fileInput = document.getElementById('file-input');
+    var dropzone  = document.getElementById('dropzone');
+    var fileForm  = document.getElementById('file-form');
+    var pathForm  = document.getElementById('path-form');
+
+    function startScanning() { document.body.classList.add('scanning'); }
+
+    // Path scan: show the overlay while the (blocking) POST + reload happens.
+    if (pathForm) pathForm.addEventListener('submit', startScanning);
+
+    // Browse: a file chosen via the native picker auto-submits.
+    if (fileInput && fileForm) {
+      fileInput.addEventListener('change', function () {
+        if (fileInput.files && fileInput.files.length) { startScanning(); fileForm.submit(); }
+      });
+    }
+
+    // Drag & drop onto the dropzone.
+    if (dropzone && fileInput && fileForm) {
+      ['dragenter', 'dragover'].forEach(function (evt) {
+        dropzone.addEventListener(evt, function (e) { e.preventDefault(); dropzone.classList.add('drag'); });
+      });
+      ['dragleave', 'dragend'].forEach(function (evt) {
+        dropzone.addEventListener(evt, function () { dropzone.classList.remove('drag'); });
+      });
+      dropzone.addEventListener('drop', function (e) {
+        e.preventDefault(); dropzone.classList.remove('drag');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+          fileInput.files = e.dataTransfer.files; startScanning(); fileForm.submit();
+        }
+      });
+      // Keyboard: Enter/Space on the focused dropzone opens the picker.
+      dropzone.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+      });
+    }
+  })();
+</script>
 </body>
 </html>
