@@ -150,4 +150,4 @@ def create_app(vault_dir: Path | None = None) -> Flask:
 
 
 if __name__ == "__main__":
-    create_app().run(debug=True, port=5060)
+    create_app().run(debug=True, port=8080)
