@@ -1,7 +1,30 @@
 name: build-binaries
 
-# Build standalone malscan binaries for Windows + macOS and attach them to a
-# GitHub Release. Triggers on a version tag (e.g. v0.1.0) or manually.
+# Build malscan distributables and attach them to a GitHub Release.
+#
+# Each release gets THREE kinds of asset:
+#   * source archives (.zip / .tar.gz) -> run-from-source, NO SmartScreen or
+#     Gatekeeper warning. This is the recommended, warning-free download.
+#   * standalone Windows + macOS binaries (PyInstaller). These are convenient
+#     but UNSIGNED by default, so the OS will warn until they are signed.
+#
+# Code signing is OPTIONAL and OFF until you add the relevant repo secrets
+# (Settings -> Secrets and variables -> Actions). When a secret is present the
+# matching sign/notarize step runs automatically; otherwise it is skipped.
+#
+#   Windows (Authenticode):
+#     WINDOWS_CERT_BASE64      base64 of your code-signing .pfx
+#     WINDOWS_CERT_PASSWORD    password for that .pfx
+#
+#   macOS (Developer ID + notarization):
+#     MACOS_CERT_BASE64        base64 of your Developer ID Application .p12
+#     MACOS_CERT_PASSWORD      password for that .p12
+#     MACOS_SIGN_IDENTITY      e.g. "Developer ID Application: Name (TEAMID)"
+#     MACOS_NOTARY_APPLE_ID    Apple ID email used for notarytool
+#     MACOS_NOTARY_TEAM_ID     your 10-char Apple Team ID
+#     MACOS_NOTARY_PASSWORD    an app-specific password for that Apple ID
+#
+# Triggers on a version tag (e.g. v0.3.0) or manually.
 on:
   push:
     tags: ["v*"]
@@ -11,9 +34,34 @@ permissions:
   contents: write
 
 jobs:
+  source:
+    name: source archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build source archives
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME:-dev}"
+          mkdir -p dist
+          git archive --format=zip --prefix="malscan-${version}/" \
+            -o "dist/malscan-${version}-source.zip" HEAD
+          git archive --format=tar --prefix="malscan-${version}/" HEAD \
+            | gzip > "dist/malscan-${version}-source.tar.gz"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: dist/*
+
   build:
     name: build (${{ matrix.artifact }})
     runs-on: ${{ matrix.os }}
+    env:
+      # Exposed so the optional sign steps can detect whether secrets exist.
+      WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+      MACOS_CERT_BASE64: ${{ secrets.MACOS_CERT_BASE64 }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,6 +97,53 @@ jobs:
           --exclude-module anthropic
           run_malscan.py
 
+      - name: Sign Windows binary (optional — runs only if WINDOWS_CERT_BASE64 is set)
+        if: matrix.os == 'windows-latest' && env.WINDOWS_CERT_BASE64 != ''
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'cert.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName | Select-Object -Last 1
+          & $signtool.FullName sign /f $pfx /p $env:WINDOWS_CERT_PASSWORD `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist/${{ matrix.out }}"
+          Remove-Item $pfx -Force
+
+      - name: Sign & notarize macOS binary (optional — runs only if MACOS_CERT_BASE64 is set)
+        if: matrix.os == 'macos-14' && env.MACOS_CERT_BASE64 != ''
+        env:
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p actions "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p actions "$keychain"
+          echo "$MACOS_CERT_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k actions "$keychain" >/dev/null
+          codesign --force --options runtime --timestamp \
+            --sign "$MACOS_SIGN_IDENTITY" "dist/${{ matrix.out }}"
+          # Notarize. A bare CLI binary can't be stapled (stapling needs a
+          # .app/.dmg/.pkg), but notarization still registers the hash with
+          # Apple so Gatekeeper's online check passes on first run.
+          ditto -c -k "dist/${{ matrix.out }}" "$RUNNER_TEMP/malscan.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/malscan.zip" \
+            --apple-id "$MACOS_NOTARY_APPLE_ID" \
+            --team-id "$MACOS_NOTARY_TEAM_ID" \
+            --password "$MACOS_NOTARY_PASSWORD" --wait
+          codesign --verify --verbose "dist/${{ matrix.out }}"
+          rm -f "$RUNNER_TEMP/cert.p12"
+
       - name: Rename artifact
         shell: bash
         run: mv "dist/${{ matrix.out }}" "dist/${{ matrix.artifact }}"
@@ -60,7 +155,7 @@ jobs:
 
   release:
     name: publish release
-    needs: build
+    needs: [source, build]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -75,3 +170,16 @@ jobs:
         with:
           files: artifacts/**/*
           generate_release_notes: true
+          append_body: true
+          body: |
+            ---
+            ### Which file should I download?
+
+            - **Recommended — `malscan-*-source.zip` / `.tar.gz`:** runs from
+              source with no SmartScreen or Gatekeeper warning. Unzip, then run
+              `run_malscan.bat` (Windows) or `./run_malscan.sh` (macOS/Linux).
+              Requires Python 3.
+            - **`malscan-windows-x64.exe` / `malscan-macos-arm64`:** standalone
+              binaries (no Python needed). These are **unsigned** unless signing
+              secrets are configured, so the OS may warn on first launch —
+              Windows: **More info → Run anyway**; macOS: **right-click → Open**.
