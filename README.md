@@ -10,6 +10,41 @@ single verdict per file — entirely offline, no cloud APIs, no telemetry.
 > built to be genuinely useful and to demonstrate how detection engines work,
 > not to replace Microsoft Defender.
 
+## Running it safely (no SmartScreen / Gatekeeper warnings)
+
+malscan is pure Python, so the safest and warning-free way to run it is **from
+source** — no unsigned `.exe`/binary for the OS to flag.
+
+**Windows** — double-click **`run_malscan.bat`** (or run it in a terminal). It
+installs dependencies and opens the dashboard at <http://127.0.0.1:8080>.
+
+**macOS / Linux**:
+
+```bash
+chmod +x run_malscan.sh
+./run_malscan.sh        # http://127.0.0.1:8080
+```
+
+Or manually on any platform:
+
+```bash
+pip install -r requirements.txt flask waitress
+python serve.py         # http://127.0.0.1:8080
+```
+
+> **Why port 8080?** Earlier builds used port 5060, which browsers block as
+> "unsafe" (it's the SIP/VoIP port) — you'd see `ERR_UNSAFE_PORT`. The dashboard
+> now defaults to **8080**.
+
+> **About the prebuilt binaries:** the `.exe`/app bundles in the Releases are
+> *unsigned*, so Windows SmartScreen ("Windows protected your PC") and macOS
+> Gatekeeper ("unidentified developer") will warn before they run. That's
+> expected for any unsigned app — not a sign of infection. To clear it: on
+> Windows click **More info → Run anyway**; on macOS **right-click → Open** (or
+> `xattr -d com.apple.quarantine <app>`). Removing the warning entirely requires
+> a paid code-signing certificate (Windows) and Apple notarization (macOS).
+> Running from source as above avoids the warning completely.
+
 ## Detection engines
 
 | Engine | Technique | Verdict it can raise |
@@ -146,7 +181,7 @@ A themed Flask UI to scan paths, view verdicts, and manage quarantine.
 
 ```bash
 pip install flask
-python serve.py        # http://127.0.0.1:5060
+python serve.py        # http://127.0.0.1:8080
 ```
 
 ## VirusTotal lookup (optional)

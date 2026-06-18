@@ -17,7 +17,9 @@ import sys
 import threading
 import webbrowser
 
-_DEFAULT_PORT = 5060
+# Avoid browser-blocked "unsafe" ports (5060 = SIP -> ERR_UNSAFE_PORT in
+# Chrome/Edge/Firefox). 8080 is a safe, conventional local web port.
+_DEFAULT_PORT = 8080
 
 
 def _pick_port(preferred: int = _DEFAULT_PORT) -> int:
