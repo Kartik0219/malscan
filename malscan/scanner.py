@@ -9,6 +9,7 @@ from typing import Iterator
 from . import archive
 from .engines.hashes import HashEngine
 from .engines.heuristics import HeuristicEngine
+from .engines.filetype import FileTypeEngine
 from .engines.yara_engine import YaraEngine
 from .models import FileResult, Finding, Severity
 from ._paths import resource_root
@@ -40,8 +41,12 @@ class Scanner:
         self.scan_archives = scan_archives
         self.hash_engine = HashEngine(sig / "hash_blocklist.txt")
         self.heuristic_engine = HeuristicEngine()
+        self.filetype_engine = FileTypeEngine()
         self.yara_engine = YaraEngine(sig / "yara")
-        self._engines = [self.hash_engine, self.heuristic_engine, self.yara_engine]
+        self._engines = [
+            self.hash_engine, self.heuristic_engine,
+            self.filetype_engine, self.yara_engine,
+        ]
 
         # VirusTotal is opt-in: only added when a key is supplied. The public
         # web demo constructs Scanner() with no key, so it never phones home.
@@ -56,6 +61,7 @@ class Scanner:
         status = {
             "hash": "ready",
             "heuristic": "ready",
+            "filetype": "ready",
             "yara": self.yara_engine.status,
         }
         if self.vt_engine is not None:

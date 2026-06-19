@@ -1,6 +1,6 @@
 # malscan
 
-A local, on-demand malware scanner. Combines four detection techniques into a
+A local, on-demand malware scanner. Combines five detection techniques into a
 single verdict per file — entirely offline, no cloud APIs, no telemetry.
 
 **Live demo:** <https://malscan.onrender.com> — a safe, upload-only public build (the full local dashboard is CLI-only).
@@ -51,6 +51,7 @@ python serve.py         # http://127.0.0.1:8080
 |--------|-----------|----------------------|
 | **hash** | SHA-256 / MD5 match against a blocklist | `malicious` |
 | **heuristic** | Weighted static traits: whole-file & PE-section entropy + risky imports | `suspicious` |
+| **filetype** | Magic-bytes vs. claimed extension mismatch + double-extension trick | `suspicious` |
 | **yara** | YARA rule matching (`yara-python`) | per-rule (`suspicious`/`malicious`) |
 | **virustotal** | Opt-in hash lookup against VirusTotal's AV consensus | per-consensus |
 
@@ -137,6 +138,10 @@ Each file gets one verdict — the highest severity across all engine findings:
 - **PE analysis** parses Windows executables for high-entropy (packed) sections
   and imports commonly abused for process injection and anti-debugging
   (`WriteProcessMemory`, `CreateRemoteThread`, `IsDebuggerPresent`, …).
+- **File-type masquerading** compares a file's real magic bytes against the type
+  its name claims — a `.pdf` or `.jpg` that is actually a PE/ELF/Mach-O
+  executable, or a double extension like `invoice.pdf.exe`. Maps to MITRE
+  `T1036.008` / `T1036.007`. Pure stdlib; near-zero false positives by design.
 - **YARA** runs pattern rules from `signatures/yara/`. Drop in curated rule
   feeds (e.g. [signature-base](https://github.com/Neo23x0/signature-base)) to
   expand coverage.

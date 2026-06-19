@@ -24,6 +24,8 @@ class Technique:
 TECHNIQUES: dict[str, "Technique"] = {
     "T1027":     Technique("T1027", "Obfuscated Files or Information", "Defense Evasion"),
     "T1027.002": Technique("T1027.002", "Software Packing", "Defense Evasion"),
+    "T1036.007": Technique("T1036.007", "Double File Extension", "Defense Evasion"),
+    "T1036.008": Technique("T1036.008", "Masquerade File Type", "Defense Evasion"),
     "T1055":     Technique("T1055", "Process Injection", "Defense Evasion"),
     "T1056.001": Technique("T1056.001", "Keylogging", "Collection"),
     "T1059":     Technique("T1059", "Command and Scripting Interpreter", "Execution"),
