@@ -53,6 +53,7 @@ python serve.py         # http://127.0.0.1:8080
 | **heuristic** | Weighted static traits: whole-file & PE-section entropy + risky imports | `suspicious` |
 | **filetype** | Magic-bytes vs. claimed extension mismatch + double-extension trick | `suspicious` |
 | **yara** | YARA rule matching (`yara-python`) | per-rule (`suspicious`/`malicious`) |
+| **ml** *(opt-in)* | Trained logistic-regression model over byte/PE features | `suspicious` |
 | **virustotal** | Opt-in hash lookup against VirusTotal's AV consensus | per-consensus |
 
 The hash and heuristic engines are pure stdlib. `pefile` and `yara-python` are
@@ -230,6 +231,37 @@ tier allows 4 lookups/min, so this is best for scanning a handful of files.
 > leak the API key and exhaust the rate limit on visitors' uploads. It's
 > CLI-only and off unless you pass `--virustotal` with a key present.
 
+## Machine-learning classifier (optional)
+
+Where the heuristic engine encodes an analyst's hand-written rules, the ML engine
+*learns* the weights from a labelled corpus — the approach modern AV uses to catch
+novel samples it has no signature for. It extracts a compact feature vector from
+each file (whole-file entropy, byte-distribution stats, plus PE section/import
+structure) and scores it with a logistic-regression model.
+
+It is **opt-in and model-gated**, just like the VirusTotal engine: no model is
+bundled, and a scan never loads one implicitly. You train it on your own labelled
+data. **Inference is pure stdlib** (the model is a small JSON of weights), so a
+trained model scores files even in the dependency-free frozen binary.
+
+```bash
+# 1. Train on two folders of known-good and known-bad files.
+#    For a real model, point --malicious at a malware corpus such as a subset of
+#    the EMBER dataset (https://github.com/elastic/ember); keep samples in a VM.
+python -m malscan ml-train --benign ./clean --malicious ./malware -o ml_model.json
+
+# 2. Scan with it.
+python -m malscan scan ./downloads --ml-model ml_model.json
+# or place it at signatures/ml_model.json and just pass --ml
+```
+
+Being inference rather than a signature, the ML engine raises at most `suspicious`
+and reports the model's probability, so a human can weigh it. The bundled trainer
+is a readable baseline (logistic regression via gradient descent); the feature
+extractor and scoring interface are the same shape a production gradient-boosting
+pipeline would use, so it's a faithful, retrainable starting point — not a
+pretrained, production-grade detector.
+
 ## AI triage (optional)
 
 Have Claude turn malscan's findings into a plain-English analyst writeup —
@@ -258,6 +290,7 @@ to your terminal. Opt-in and CLI-only — never wired into the public web demo.
 - [x] MITRE ATT&CK technique tagging on findings (CLI, reports, dashboard)
 - [x] File-type masquerading detection (magic-bytes vs. extension)
 - [x] SARIF output for GitHub code scanning
+- [x] ML classifier (trainable logistic-regression engine, stdlib inference)
 
 ## License
 

@@ -35,6 +35,7 @@ class Scanner:
         max_size: int = DEFAULT_MAX_SIZE,
         vt_api_key: str | None = None,
         scan_archives: bool = True,
+        ml_model_path: str | Path | None = None,
     ):
         sig = signatures_dir or _signatures_dir()
         self.max_size = max_size
@@ -47,6 +48,15 @@ class Scanner:
             self.hash_engine, self.heuristic_engine,
             self.filetype_engine, self.yara_engine,
         ]
+
+        # ML is opt-in: only attached when a trained model is supplied. A scan
+        # never loads a model implicitly. A bad/incompatible model raises here
+        # so the user hears about it rather than silently scanning without ML.
+        self.ml_engine = None
+        if ml_model_path:
+            from .engines.mlmodel import MLEngine
+            self.ml_engine = MLEngine.from_path(ml_model_path)
+            self._engines.append(self.ml_engine)
 
         # VirusTotal is opt-in: only added when a key is supplied. The public
         # web demo constructs Scanner() with no key, so it never phones home.
@@ -64,6 +74,8 @@ class Scanner:
             "filetype": "ready",
             "yara": self.yara_engine.status,
         }
+        if self.ml_engine is not None:
+            status["ml"] = "ready"
         if self.vt_engine is not None:
             status["virustotal"] = "ready"
         return status

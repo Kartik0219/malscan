@@ -12,7 +12,8 @@ from pathlib import Path
 from . import __version__, attack
 from .models import Severity
 from .quarantine import Quarantine
-from .scanner import Scanner
+from .scanner import DEFAULT_MAX_SIZE, Scanner
+from ._paths import resource_root
 
 # ANSI colors keyed by severity (disabled when output isn't a TTY).
 _COLORS = {
@@ -68,6 +69,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="don't scan inside zip/tar/gzip archives (archive members are "
              "otherwise walked in memory under strict budgets)",
     )
+    scan.add_argument(
+        "--ml",
+        action="store_true",
+        help="enable the ML classifier using the default model "
+             "(signatures/ml_model.json); train one with `malscan ml-train`",
+    )
+    scan.add_argument(
+        "--ml-model", dest="ml_model", metavar="FILE",
+        help="enable the ML classifier using a specific model JSON file",
+    )
 
     tri = sub.add_parser(
         "triage",
@@ -82,6 +93,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="triage files at or above this severity (default: suspicious)",
     )
     tri.add_argument("--model", default="claude-opus-4-8", help="Claude model ID (default: claude-opus-4-8)")
+
+    mlt = sub.add_parser(
+        "ml-train",
+        help="train the ML classifier from labelled benign/ and malicious/ folders",
+    )
+    mlt.add_argument("--benign", required=True, metavar="DIR", help="folder of known-good files")
+    mlt.add_argument("--malicious", required=True, metavar="DIR", help="folder of known-bad files")
+    mlt.add_argument("-o", "--out", default="ml_model.json", metavar="FILE", help="output model path")
+    mlt.add_argument("--epochs", type=int, default=400, help="training iterations (default: 400)")
+    mlt.add_argument("--lr", type=float, default=0.1, help="learning rate (default: 0.1)")
+    mlt.add_argument("--max-size", type=int, default=DEFAULT_MAX_SIZE,
+                     help="skip training files larger than this many bytes")
 
     q = sub.add_parser("quarantine", help="manage the quarantine vault")
     qsub = q.add_subparsers(dest="qcommand", required=True)
@@ -105,7 +128,23 @@ def _cmd_scan(args) -> int:
             print("error: --virustotal requires the VT_API_KEY environment variable", file=sys.stderr)
             return 2
 
-    scanner = Scanner(vt_api_key=vt_key, scan_archives=not args.no_archives)
+    ml_model_path = None
+    if args.ml_model or args.ml:
+        ml_model_path = Path(args.ml_model) if args.ml_model else resource_root() / "signatures" / "ml_model.json"
+        if not ml_model_path.is_file():
+            print(f"error: ML model not found at {ml_model_path}\n"
+                  "       train one with: malscan ml-train --benign <dir> --malicious <dir> -o "
+                  f"{ml_model_path}", file=sys.stderr)
+            return 2
+
+    try:
+        scanner = Scanner(
+            vt_api_key=vt_key, scan_archives=not args.no_archives,
+            ml_model_path=ml_model_path,
+        )
+    except (ValueError, OSError) as exc:
+        print(f"error: could not load ML model: {exc}", file=sys.stderr)
+        return 2
     status = scanner.engine_status
     print(f"malscan {__version__} | engines: "
           + ", ".join(f"{k}={v}" for k, v in status.items()))
@@ -187,6 +226,52 @@ def _cmd_scan(args) -> int:
     return 1 if counts[Severity.MALICIOUS] else 0
 
 
+def _cmd_mltrain(args) -> int:
+    from . import features, ml
+
+    def _load_dir(folder: str, label: int) -> tuple[list, list]:
+        root = Path(folder)
+        if not root.is_dir():
+            raise NotADirectoryError(folder)
+        X, y = [], []
+        for child in root.rglob("*"):
+            if not child.is_file():
+                continue
+            try:
+                data = child.read_bytes()
+            except OSError:
+                continue
+            if len(data) > args.max_size:
+                continue
+            X.append(features.extract(data))
+            y.append(label)
+        return X, y
+
+    try:
+        bx, by = _load_dir(args.benign, 0)
+        mx, my = _load_dir(args.malicious, 1)
+    except NotADirectoryError as exc:
+        print(f"error: not a directory: {exc}", file=sys.stderr)
+        return 2
+
+    X, y = bx + mx, by + my
+    if not bx or not mx:
+        print("error: need at least one file in each of --benign and --malicious",
+              file=sys.stderr)
+        return 2
+
+    print(f"malscan {__version__} | training on {len(bx)} benign + {len(mx)} malicious sample(s)...")
+    model = ml.fit(X, y, epochs=args.epochs, lr=args.lr, malscan_version=__version__)
+
+    # Report training accuracy as a sanity check (not a generalisation estimate).
+    correct = sum(1 for vec, label in zip(X, y) if model.predict(vec) == bool(label))
+    model.save(args.out)
+    print(f"training accuracy: {correct}/{len(X)} ({100 * correct / len(X):.1f}%)")
+    print(f"model written to {args.out}")
+    print("scan with it via:  malscan scan <target> --ml-model " + args.out)
+    return 0
+
+
 def _cmd_quarantine(args) -> int:
     q = Quarantine()
     if args.qcommand == "list":
@@ -252,6 +337,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "scan":
         return _cmd_scan(args)
+    if args.command == "ml-train":
+        return _cmd_mltrain(args)
     if args.command == "quarantine":
         return _cmd_quarantine(args)
     if args.command == "triage":
