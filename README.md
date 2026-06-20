@@ -120,6 +120,26 @@ open in any browser or share — handy for attaching scan results to a ticket.
 Exit code is `1` if anything `malicious` is found, else `0` — convenient for
 CI pipelines and pre-commit hooks.
 
+### SARIF output (GitHub code scanning)
+
+Write a [SARIF 2.1.0](https://sarifweb.azurewebsites.net/) report so findings
+surface as alerts in a repository's **Security** tab, alongside CodeQL:
+
+```bash
+python -m malscan scan ./artifacts --sarif malscan.sarif
+```
+
+Each finding becomes a SARIF `result` (severity maps to `error`/`warning`/`note`
+with a GitHub `security-severity` band); MITRE ATT&CK IDs ride along in result
+properties. Upload it from a workflow:
+
+```yaml
+- run: python -m malscan scan ./artifacts --sarif malscan.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: malscan.sarif
+```
+
 ## Verdicts
 
 Each file gets one verdict — the highest severity across all engine findings:
@@ -236,6 +256,8 @@ to your terminal. Opt-in and CLI-only — never wired into the public web demo.
 - [x] HTML report output
 - [x] AI triage of findings (Claude)
 - [x] MITRE ATT&CK technique tagging on findings (CLI, reports, dashboard)
+- [x] File-type masquerading detection (magic-bytes vs. extension)
+- [x] SARIF output for GitHub code scanning
 
 ## License
 

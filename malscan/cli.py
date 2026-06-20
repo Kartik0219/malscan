@@ -43,6 +43,8 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--no-recursive", action="store_true", help="don't descend into subdirectories")
     scan.add_argument("--json", dest="json_out", metavar="FILE", help="write full JSON report to FILE")
     scan.add_argument("--html", dest="html_out", metavar="FILE", help="write a standalone HTML report to FILE")
+    scan.add_argument("--sarif", dest="sarif_out", metavar="FILE",
+                      help="write a SARIF 2.1.0 report (for GitHub code scanning) to FILE")
     scan.add_argument(
         "--min-severity",
         choices=[s.value for s in Severity],
@@ -156,7 +158,7 @@ def _cmd_scan(args) -> int:
     if quarantined:
         print(f"  quarantined: {quarantined}")
 
-    if args.json_out or args.html_out:
+    if args.json_out or args.html_out or args.sarif_out:
         report = {
             "tool": "malscan",
             "version": __version__,
@@ -177,6 +179,10 @@ def _cmd_scan(args) -> int:
             from .report import render_html
             Path(args.html_out).write_text(render_html(report), encoding="utf-8")
             print(f"HTML report written to {args.html_out}")
+        if args.sarif_out:
+            from .sarif import render_sarif
+            Path(args.sarif_out).write_text(render_sarif(report), encoding="utf-8")
+            print(f"SARIF report written to {args.sarif_out}")
 
     return 1 if counts[Severity.MALICIOUS] else 0
 
