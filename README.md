@@ -201,6 +201,31 @@ python -m malscan quarantine restore <id> [--to <path>]
 python -m malscan quarantine delete <id>
 ```
 
+## Real-time monitoring
+
+Watch one or more folders and scan files **as they are created or modified** —
+the on-access counterpart to the one-shot `scan` command, handy for a Downloads
+folder or an upload directory:
+
+```bash
+# Watch a folder; report suspicious-or-worse, auto-isolate anything malicious
+python -m malscan monitor ~/Downloads --quarantine
+
+# Watch several paths, also scoring with an ML model, polling twice a second
+python -m malscan monitor ./incoming ./uploads --ml-model ml_model.json --interval 0.5
+```
+
+A changed file is only scanned once it has **settled** (size and mtime stable
+across two polls), so half-written downloads aren't scanned mid-flight. The
+monitor reuses whatever engines you configure, and skips its own quarantine vault.
+
+> **Scope, stated plainly:** this is *user-space monitor-and-react*, not
+> *kernel-level intercept-and-block*. A production AV scans a file **before** the
+> OS opens it and can deny the open — via Linux `fanotify` (`FAN_OPEN_PERM`), a
+> Windows minifilter driver, or the macOS Endpoint Security framework. That is
+> native kernel code and out of scope for a pure-Python tool; malscan reacts as
+> soon as a file lands, which is the right model for a watched drop-folder.
+
 ## Web dashboard
 
 A themed Flask UI to scan paths, view verdicts, and manage quarantine.
@@ -291,6 +316,7 @@ to your terminal. Opt-in and CLI-only — never wired into the public web demo.
 - [x] File-type masquerading detection (magic-bytes vs. extension)
 - [x] SARIF output for GitHub code scanning
 - [x] ML classifier (trainable logistic-regression engine, stdlib inference)
+- [x] Real-time folder monitoring (user-space on-access scanning)
 
 ## License
 

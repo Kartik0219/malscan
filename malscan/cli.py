@@ -94,6 +94,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     tri.add_argument("--model", default="claude-opus-4-8", help="Claude model ID (default: claude-opus-4-8)")
 
+    mon = sub.add_parser(
+        "monitor",
+        help="watch folder(s) and scan files in real time as they appear or change",
+    )
+    mon.add_argument("paths", nargs="+", help="folder(s) or file(s) to watch")
+    mon.add_argument("--interval", type=float, default=1.0, help="seconds between polls (default: 1.0)")
+    mon.add_argument("--no-recursive", action="store_true", help="don't watch subdirectories")
+    mon.add_argument("--quarantine", action="store_true",
+                     help="auto-isolate files with a 'malicious' verdict")
+    mon.add_argument("--min-severity", choices=[s.value for s in Severity], default="suspicious",
+                     help="only report files at or above this severity (default: suspicious)")
+    mon.add_argument("--ml-model", dest="ml_model", metavar="FILE",
+                     help="also score watched files with this ML model")
+    mon.add_argument("--scan-existing", action="store_true",
+                     help="scan files already present at startup, not just new/changed ones")
+
     mlt = sub.add_parser(
         "ml-train",
         help="train the ML classifier from labelled benign/ and malicious/ folders",
@@ -226,6 +242,71 @@ def _cmd_scan(args) -> int:
     return 1 if counts[Severity.MALICIOUS] else 0
 
 
+def _cmd_monitor(args) -> int:
+    from .monitor import Monitor
+
+    use_color = sys.stdout.isatty()
+    min_rank = Severity(args.min_severity).rank
+
+    ml_model_path = Path(args.ml_model) if args.ml_model else None
+    if ml_model_path and not ml_model_path.is_file():
+        print(f"error: ML model not found at {ml_model_path}", file=sys.stderr)
+        return 2
+    try:
+        scanner = Scanner(ml_model_path=ml_model_path)
+    except (ValueError, OSError) as exc:
+        print(f"error: could not load ML model: {exc}", file=sys.stderr)
+        return 2
+
+    for p in args.paths:
+        if not Path(p).exists():
+            print(f"warning: path does not exist: {p}", file=sys.stderr)
+
+    quarantine = Quarantine() if args.quarantine else None
+    monitor = Monitor(
+        scanner, args.paths,
+        recursive=not args.no_recursive, quarantine=quarantine,
+    )
+
+    status = scanner.engine_status
+    print(f"malscan {__version__} | engines: " + ", ".join(f"{k}={v}" for k, v in status.items()))
+    print(f"monitoring (real-time): {', '.join(args.paths)}")
+    print(f"poll interval: {args.interval}s | reporting: {args.min_severity}+"
+          + (" | auto-quarantine: on" if quarantine else ""))
+
+    counts = {"events": 0, "quarantined": 0}
+
+    def report(event) -> None:
+        result = event.result
+        if result.error:
+            return
+        verdict = result.verdict
+        if verdict.rank < min_rank:
+            return
+        counts["events"] += 1
+        label = _color(verdict.value.upper(), verdict, use_color)
+        print(f"  [{label}] {event.path}")
+        for f in result.findings:
+            print(f"           - ({f.engine}) {f.message}")
+        if result.techniques:
+            print("           ATT&CK: " + ", ".join(attack.label(t) for t in result.techniques))
+        if event.quarantined:
+            counts["quarantined"] += 1
+            print(f"           -> quarantined as {event.quarantined}")
+
+    if args.scan_existing:
+        for p in args.paths:
+            for result in scanner.scan_path(p, recursive=not args.no_recursive):
+                from .monitor import MonitorEvent
+                report(MonitorEvent(path=result.path, result=result))
+
+    print("watching for changes - press Ctrl-C to stop\n")
+    monitor.run(interval=args.interval, on_event=report)
+    print(f"\nstopped. {counts['events']} flagged event(s)"
+          + (f", {counts['quarantined']} quarantined" if counts["quarantined"] else ""))
+    return 0
+
+
 def _cmd_mltrain(args) -> int:
     from . import features, ml
 
@@ -337,6 +418,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "scan":
         return _cmd_scan(args)
+    if args.command == "monitor":
+        return _cmd_monitor(args)
     if args.command == "ml-train":
         return _cmd_mltrain(args)
     if args.command == "quarantine":
