@@ -52,8 +52,10 @@ python serve.py         # http://127.0.0.1:8080
 | **hash** | SHA-256 / MD5 match against a blocklist | `malicious` |
 | **heuristic** | Weighted static traits: whole-file & PE-section entropy + risky imports | `suspicious` |
 | **filetype** | Magic-bytes vs. claimed extension mismatch + double-extension trick | `suspicious` |
+| **logical** | Multi-condition signatures (ClamAV-`.ldb`-style boolean rules) | per-rule |
 | **yara** | YARA rule matching (`yara-python`) | per-rule (`suspicious`/`malicious`) |
 | **ml** *(opt-in)* | Trained logistic-regression model over byte/PE features | `suspicious` |
+| **reputation** *(opt-in)* | Local prevalence cache — flags never-before-seen executables | `info` |
 | **virustotal** | Opt-in hash lookup against VirusTotal's AV consensus | per-consensus |
 
 The hash and heuristic engines are pure stdlib. `pefile` and `yara-python` are
@@ -173,6 +175,29 @@ Each file gets one verdict — the highest severity across all engine findings:
   `signatures/hash_blocklist.txt`.
 - **More rules:** drop `.yar` files into `signatures/yara/`. Rule `meta` may set
   `severity = "suspicious"` to downgrade from the default `malicious`.
+- **Logical signatures:** add `.msig` rules under `signatures/logical/` (below).
+
+### Logical signatures
+
+A hash or single string is blunt; real engines combine several sub-patterns with
+boolean logic. The `logical` engine brings ClamAV-`.ldb`-style multi-condition
+rules to malscan. Each line of a `signatures/logical/*.msig` file is:
+
+```
+name ; severity ; techniques ; expression ; sub0 ; sub1 ; ...
+```
+
+`expression` is boolean over sub-signature indices (`&`, `|`, parentheses); each
+`subN` is `str:LITERAL` or a hex pattern (`4d5a`, `??` = any byte, `*` = gap). For
+example, a precise process-injection rule — any one import is benign, all three
+together is not:
+
+```
+PE_Injection_Trio ; suspicious ; T1055 ; 0 & 1 & 2 & 3 ; 4d5a ; str:VirtualAllocEx ; str:WriteProcessMemory ; str:CreateRemoteThread
+```
+
+The boolean expression is parsed by a small recursive-descent evaluator (never
+`eval`), so a malformed or hostile rule file is skipped, not executed.
 
 ## Testing
 
@@ -287,6 +312,24 @@ extractor and scoring interface are the same shape a production gradient-boostin
 pipeline would use, so it's a faithful, retrainable starting point — not a
 pretrained, production-grade detector.
 
+## Local reputation cache (optional)
+
+Commercial AV treats a file the world has never seen differently from one running
+on millions of machines — rarity is signal ("block at first sight"). You can't
+replicate a global telemetry network solo, but you *can* keep a **local**
+prevalence record. With `--reputation`, malscan logs every scanned hash to a small
+SQLite cache and raises an `info` finding the first time it sees an **executable**
+on this host:
+
+```bash
+python -m malscan scan ./downloads --reputation     # record + flag unknowns
+python -m malscan reputation                         # show cache statistics
+```
+
+It is **opt-in** and only writes when enabled, so the core and the public web demo
+stay stateless. This is the honest, single-host slice of cloud reputation — the
+*mechanism* (prevalence-based suspicion), scoped to what one machine can know.
+
 ## AI triage (optional)
 
 Have Claude turn malscan's findings into a plain-English analyst writeup —
@@ -317,6 +360,8 @@ to your terminal. Opt-in and CLI-only — never wired into the public web demo.
 - [x] SARIF output for GitHub code scanning
 - [x] ML classifier (trainable logistic-regression engine, stdlib inference)
 - [x] Real-time folder monitoring (user-space on-access scanning)
+- [x] Logical multi-condition signatures (ClamAV-`.ldb`-style boolean rules)
+- [x] Local file-reputation cache (first-seen / prevalence flagging)
 
 ## License
 

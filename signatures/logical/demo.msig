@@ -1,0 +1,20 @@
+# malscan logical signatures — ClamAV-.ldb-style multi-condition rules.
+#
+# format:  name ; severity ; techniques ; expression ; sub0 ; sub1 ; ...
+#   severity     clean|info|suspicious|malicious  (default: malicious)
+#   techniques   comma-separated ATT&CK IDs (may be empty)
+#   expression   boolean over subsig indices: & (and), | (or), parentheses
+#   subN         str:LITERAL  or  hex (4d5a, ?? = any byte, * = gap)
+#
+# These are illustrative, low-false-positive rules — the point is to show how
+# combining sub-signatures with logic beats any single pattern.
+
+# A PE that imports the classic process-injection trio. Any one import is benign
+# (debuggers use them too); all three together is a strong signal.
+PE_Injection_Trio ; suspicious ; T1055 ; 0 & 1 & 2 & 3 ; 4d5a ; str:VirtualAllocEx ; str:WriteProcessMemory ; str:CreateRemoteThread
+
+# A PE packed with UPX (either section name present alongside the MZ header).
+UPX_Packed_PE ; suspicious ; T1027.002 ; 0 & (1 | 2) ; 4d5a ; str:UPX0 ; str:UPX1
+
+# The EICAR test string expressed as two sub-signatures that must co-occur.
+EICAR_Logical ; malicious ; ; 0 & 1 ; str:EICAR-STANDARD-ANTIVIRUS-TEST-FILE ; str:$H+H*

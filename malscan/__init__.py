@@ -6,4 +6,4 @@ per file. Detection logic is entirely local: no external API calls, no cloud
 dependencies.
 """
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"

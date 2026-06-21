@@ -13,7 +13,7 @@ from . import __version__, attack
 from .models import Severity
 from .quarantine import Quarantine
 from .scanner import DEFAULT_MAX_SIZE, Scanner
-from ._paths import resource_root
+from ._paths import resource_root, user_data_root
 
 # ANSI colors keyed by severity (disabled when output isn't a TTY).
 _COLORS = {
@@ -79,6 +79,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--ml-model", dest="ml_model", metavar="FILE",
         help="enable the ML classifier using a specific model JSON file",
     )
+    scan.add_argument(
+        "--reputation", action="store_true",
+        help="record file prevalence locally and flag never-before-seen executables",
+    )
+    scan.add_argument(
+        "--reputation-db", dest="reputation_db", metavar="FILE",
+        help="path to the reputation database (implies --reputation)",
+    )
 
     tri = sub.add_parser(
         "triage",
@@ -107,6 +115,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="only report files at or above this severity (default: suspicious)")
     mon.add_argument("--ml-model", dest="ml_model", metavar="FILE",
                      help="also score watched files with this ML model")
+    mon.add_argument("--reputation", action="store_true",
+                     help="record prevalence and flag never-before-seen executables")
     mon.add_argument("--scan-existing", action="store_true",
                      help="scan files already present at startup, not just new/changed ones")
 
@@ -121,6 +131,10 @@ def build_parser() -> argparse.ArgumentParser:
     mlt.add_argument("--lr", type=float, default=0.1, help="learning rate (default: 0.1)")
     mlt.add_argument("--max-size", type=int, default=DEFAULT_MAX_SIZE,
                      help="skip training files larger than this many bytes")
+
+    rep = sub.add_parser("reputation", help="show local file-reputation cache statistics")
+    rep.add_argument("--db", dest="reputation_db", metavar="FILE",
+                     help="reputation database path (default: under the user data dir)")
 
     q = sub.add_parser("quarantine", help="manage the quarantine vault")
     qsub = q.add_subparsers(dest="qcommand", required=True)
@@ -153,10 +167,14 @@ def _cmd_scan(args) -> int:
                   f"{ml_model_path}", file=sys.stderr)
             return 2
 
+    reputation_db = None
+    if args.reputation_db or args.reputation:
+        reputation_db = Path(args.reputation_db) if args.reputation_db else user_data_root() / "reputation.db"
+
     try:
         scanner = Scanner(
             vt_api_key=vt_key, scan_archives=not args.no_archives,
-            ml_model_path=ml_model_path,
+            ml_model_path=ml_model_path, reputation_db=reputation_db,
         )
     except (ValueError, OSError) as exc:
         print(f"error: could not load ML model: {exc}", file=sys.stderr)
@@ -252,8 +270,9 @@ def _cmd_monitor(args) -> int:
     if ml_model_path and not ml_model_path.is_file():
         print(f"error: ML model not found at {ml_model_path}", file=sys.stderr)
         return 2
+    reputation_db = (user_data_root() / "reputation.db") if args.reputation else None
     try:
-        scanner = Scanner(ml_model_path=ml_model_path)
+        scanner = Scanner(ml_model_path=ml_model_path, reputation_db=reputation_db)
     except (ValueError, OSError) as exc:
         print(f"error: could not load ML model: {exc}", file=sys.stderr)
         return 2
@@ -353,6 +372,30 @@ def _cmd_mltrain(args) -> int:
     return 0
 
 
+def _cmd_reputation(args) -> int:
+    from .reputation import ReputationStore
+
+    db_path = Path(args.reputation_db) if args.reputation_db else user_data_root() / "reputation.db"
+    if not db_path.exists():
+        print(f"no reputation cache yet at {db_path}\n"
+              "build one by scanning with --reputation, e.g. "
+              "malscan scan <target> --reputation")
+        return 0
+    store = ReputationStore(db_path)
+    try:
+        stats = store.stats()
+    finally:
+        store.close()
+    print(f"reputation cache: {db_path}")
+    print(f"  unique files:  {stats['total']}")
+    print(f"  executables:   {stats['executables']}")
+    if stats["most_seen"]:
+        print("  most-seen hashes:")
+        for row in stats["most_seen"]:
+            print(f"    {row['sha256'][:16]}...  x{row['times_seen']}")
+    return 0
+
+
 def _cmd_quarantine(args) -> int:
     q = Quarantine()
     if args.qcommand == "list":
@@ -422,6 +465,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_monitor(args)
     if args.command == "ml-train":
         return _cmd_mltrain(args)
+    if args.command == "reputation":
+        return _cmd_reputation(args)
     if args.command == "quarantine":
         return _cmd_quarantine(args)
     if args.command == "triage":

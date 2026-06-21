@@ -10,6 +10,7 @@ from . import archive
 from .engines.hashes import HashEngine
 from .engines.heuristics import HeuristicEngine
 from .engines.filetype import FileTypeEngine
+from .engines.logical import LogicalSignatureEngine
 from .engines.yara_engine import YaraEngine
 from .models import FileResult, Finding, Severity
 from ._paths import resource_root
@@ -36,6 +37,7 @@ class Scanner:
         vt_api_key: str | None = None,
         scan_archives: bool = True,
         ml_model_path: str | Path | None = None,
+        reputation_db: str | Path | None = None,
     ):
         sig = signatures_dir or _signatures_dir()
         self.max_size = max_size
@@ -43,10 +45,11 @@ class Scanner:
         self.hash_engine = HashEngine(sig / "hash_blocklist.txt")
         self.heuristic_engine = HeuristicEngine()
         self.filetype_engine = FileTypeEngine()
+        self.logical_engine = LogicalSignatureEngine(sig / "logical")
         self.yara_engine = YaraEngine(sig / "yara")
         self._engines = [
             self.hash_engine, self.heuristic_engine,
-            self.filetype_engine, self.yara_engine,
+            self.filetype_engine, self.logical_engine, self.yara_engine,
         ]
 
         # ML is opt-in: only attached when a trained model is supplied. A scan
@@ -57,6 +60,15 @@ class Scanner:
             from .engines.mlmodel import MLEngine
             self.ml_engine = MLEngine.from_path(ml_model_path)
             self._engines.append(self.ml_engine)
+
+        # Reputation is opt-in too: only records prevalence when a DB is given,
+        # so the core and the public web demo stay stateless.
+        self.reputation_engine = None
+        if reputation_db:
+            from .engines.reputation import ReputationEngine
+            from .reputation import ReputationStore
+            self.reputation_engine = ReputationEngine(ReputationStore(reputation_db))
+            self._engines.append(self.reputation_engine)
 
         # VirusTotal is opt-in: only added when a key is supplied. The public
         # web demo constructs Scanner() with no key, so it never phones home.
@@ -72,10 +84,13 @@ class Scanner:
             "hash": "ready",
             "heuristic": "ready",
             "filetype": "ready",
+            "logical": self.logical_engine.status,
             "yara": self.yara_engine.status,
         }
         if self.ml_engine is not None:
             status["ml"] = "ready"
+        if self.reputation_engine is not None:
+            status["reputation"] = "ready"
         if self.vt_engine is not None:
             status["virustotal"] = "ready"
         return status
