@@ -10,6 +10,67 @@ single verdict per file — entirely offline, no cloud APIs, no telemetry.
 > built to be genuinely useful and to demonstrate how detection engines work,
 > not to replace Microsoft Defender.
 
+## Quick start — download & run (step by step)
+
+Two ways to get going. **Option A** is the fastest (no Python); **Option B** runs
+from source with zero OS warnings.
+
+### Option A — Download the app (no Python needed)
+
+1. Open the [**Releases page**](https://github.com/Kartik0219/malscan/releases/latest).
+2. Under **Assets**, download the file for your system:
+   - **Windows:** `malscan-windows-x64.exe`
+   - **macOS (Apple Silicon):** `malscan-macos-arm64`
+3. Run it:
+   - **Windows:** double-click the `.exe`. The first time, Windows SmartScreen may
+     say *"Windows protected your PC"* → click **More info → Run anyway** (it's
+     unsigned, not infected — see [the note below](#running-it-safely-no-smartscreen--gatekeeper-warnings)).
+   - **macOS:** open Terminal in your Downloads folder and run
+     `chmod +x malscan-macos-arm64 && ./malscan-macos-arm64`. If Gatekeeper blocks
+     it, **right-click the file → Open** once to allow it.
+4. A scan dashboard opens in your browser at **<http://127.0.0.1:8080>**. Or use it
+   from a terminal as a command-line tool:
+   ```bash
+   # Windows
+   malscan-windows-x64.exe scan "C:\Users\you\Downloads"
+   # macOS
+   ./malscan-macos-arm64 scan ~/Downloads
+   ```
+
+### Option B — Run from source (no warnings; needs Python 3)
+
+1. Install **[Python 3](https://www.python.org/downloads/)** (tick *"Add Python to
+   PATH"* on Windows).
+2. Get the code — either with git, or as a ZIP:
+   ```bash
+   git clone https://github.com/Kartik0219/malscan.git
+   cd malscan
+   ```
+   *(No git? On the repo page click **Code → Download ZIP**, then unzip it.)*
+3. Start it:
+   - **Windows:** double-click **`run_malscan.bat`** (it installs what it needs and
+     opens the dashboard).
+   - **macOS / Linux:**
+     ```bash
+     chmod +x run_malscan.sh
+     ./run_malscan.sh
+     ```
+4. Open **<http://127.0.0.1:8080>** in your browser.
+
+### Your first scan (command line)
+
+```bash
+# Scan a single file
+python -m malscan scan suspicious.exe
+
+# Scan your whole Downloads folder, show only suspicious-or-worse
+python -m malscan scan ~/Downloads --min-severity suspicious
+```
+
+It prints a verdict per file (`clean` / `info` / `suspicious` / `malicious`) and
+exits with code `1` if anything malicious is found. That's it — see the rest of
+this README for reports, quarantine, real-time monitoring, and the other engines.
+
 ## Running it safely (no SmartScreen / Gatekeeper warnings)
 
 malscan is pure Python, so the safest and warning-free way to run it is **from
