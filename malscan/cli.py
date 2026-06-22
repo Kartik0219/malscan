@@ -136,6 +136,18 @@ def build_parser() -> argparse.ArgumentParser:
     rep.add_argument("--db", dest="reputation_db", metavar="FILE",
                      help="reputation database path (default: under the user data dir)")
 
+    det = sub.add_parser(
+        "detonate",
+        help="dynamic analysis: run a sample in an isolated Docker sandbox and watch its behaviour",
+    )
+    det.add_argument("sample", help="path to the sample to detonate")
+    det.add_argument("--image", default="alpine:latest", help="container image (default: alpine:latest)")
+    det.add_argument("--timeout", type=int, default=20, help="in-container run timeout, seconds (default: 20)")
+    det.add_argument("--json", dest="json_out", metavar="FILE", help="write the behaviour report JSON to FILE")
+    det.add_argument("--confirm", action="store_true",
+                     help="actually EXECUTE the sample (default is a dry run that only prints the "
+                          "sandbox command). Only ever do this in a disposable VM.")
+
     q = sub.add_parser("quarantine", help="manage the quarantine vault")
     qsub = q.add_subparsers(dest="qcommand", required=True)
     qsub.add_parser("list", help="list quarantined files")
@@ -372,6 +384,55 @@ def _cmd_mltrain(args) -> int:
     return 0
 
 
+def _cmd_detonate(args) -> int:
+    from .sandbox import DockerSandbox
+
+    sample = Path(args.sample)
+    if not sample.is_file():
+        print(f"error: no such file: {sample}", file=sys.stderr)
+        return 2
+
+    sandbox = DockerSandbox(image=args.image, timeout=args.timeout)
+    cmd = sandbox.build_command(str(sample.resolve()))
+
+    if not args.confirm:
+        print("DRY RUN - the sample will NOT be executed. Pass --confirm to detonate")
+        print("         (only ever in a disposable VM). Sandbox command:\n")
+        print("  " + " ".join(cmd))
+        return 0
+
+    if not sandbox.is_available():
+        print("error: docker is required to detonate a sample safely; it was not found.\n"
+              "       install Docker and run this inside a disposable VM.", file=sys.stderr)
+        return 2
+
+    print(f"malscan {__version__} | detonating {sample.name} in an isolated sandbox "
+          f"(network off, read-only, {args.timeout}s)...\n")
+    result = sandbox.run(str(sample.resolve()))
+    report = result.report
+
+    verdict = report.verdict
+    print(f"  verdict: {_color(verdict.value.upper(), verdict, sys.stdout.isatty())}"
+          + (" (timed out)" if report.timed_out else ""))
+    if report.network_endpoints:
+        print("  network: " + ", ".join(report.network_endpoints))
+    if report.processes:
+        print("  processes: " + ", ".join(report.processes))
+    if report.file_writes:
+        print(f"  file writes: {len(report.file_writes)} ({', '.join(report.file_writes[:5])})")
+    if report.deleted_files:
+        print(f"  deletions: {len(report.deleted_files)}")
+    if report.anti_debug:
+        print("  anti-debug: ptrace observed")
+    if report.techniques:
+        print("  ATT&CK: " + ", ".join(attack.label(t) for t in report.techniques))
+
+    if args.json_out:
+        Path(args.json_out).write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+        print(f"\nbehaviour report written to {args.json_out}")
+    return 1 if verdict == Severity.SUSPICIOUS else 0
+
+
 def _cmd_reputation(args) -> int:
     from .reputation import ReputationStore
 
@@ -465,6 +526,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_monitor(args)
     if args.command == "ml-train":
         return _cmd_mltrain(args)
+    if args.command == "detonate":
+        return _cmd_detonate(args)
     if args.command == "reputation":
         return _cmd_reputation(args)
     if args.command == "quarantine":
