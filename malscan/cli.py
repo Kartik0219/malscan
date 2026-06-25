@@ -119,6 +119,11 @@ def build_parser() -> argparse.ArgumentParser:
                      help="record prevalence and flag never-before-seen executables")
     mon.add_argument("--scan-existing", action="store_true",
                      help="scan files already present at startup, not just new/changed ones")
+    mon.add_argument("--backend", choices=["poll", "fanotify"], default="poll",
+                     help="'poll' (default, cross-platform, react-after) or 'fanotify' "
+                          "(Linux+root, real intercept-and-block before open)")
+    mon.add_argument("--block-suspicious", action="store_true",
+                     help="fanotify backend: also deny 'suspicious' verdicts, not just 'malicious'")
 
     mlt = sub.add_parser(
         "ml-train",
@@ -260,6 +265,34 @@ def _cmd_scan(args) -> int:
     return 1 if counts[Severity.MALICIOUS] else 0
 
 
+def _run_fanotify(args, scanner, use_color) -> int:
+    """Linux on-access backend: block malicious opens before they complete."""
+    from .fanotify import FanotifyMonitor, FanotifyError, is_supported
+
+    if not is_supported():
+        print("error: the fanotify backend requires Linux with libc (and root to run).\n"
+              "       use the default --backend poll on this platform.", file=sys.stderr)
+        return 2
+
+    monitor = FanotifyMonitor(scanner, block_suspicious=args.block_suspicious)
+    print(f"malscan {__version__} | fanotify on-access (intercept-and-block)")
+    print(f"watching mounts for: {', '.join(args.paths)}")
+    print("blocking: malicious" + (" + suspicious" if args.block_suspicious else "")
+          + " - press Ctrl-C to stop\n")
+
+    def on_decision(path, allow):
+        verb = "ALLOW" if allow else _color("DENY", Severity.MALICIOUS, use_color)
+        if not allow:
+            print(f"  [{verb}] {path}")
+
+    try:
+        monitor.run(args.paths, on_decision=on_decision)
+    except FanotifyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def _cmd_monitor(args) -> int:
     from .monitor import Monitor
 
@@ -276,6 +309,9 @@ def _cmd_monitor(args) -> int:
     except (ValueError, OSError) as exc:
         print(f"error: could not load ML model: {exc}", file=sys.stderr)
         return 2
+
+    if args.backend == "fanotify":
+        return _run_fanotify(args, scanner, use_color)
 
     for p in args.paths:
         if not Path(p).exists():

@@ -312,6 +312,27 @@ monitor reuses whatever engines you configure, and skips its own quarantine vaul
 > native kernel code and out of scope for a pure-Python tool; malscan reacts as
 > soon as a file lands, which is the right model for a watched drop-folder.
 
+### fanotify on-access backend (Linux, experimental)
+
+On Linux, malscan can do *real* intercept-and-block via the kernel's fanotify
+permission events (`FAN_OPEN_PERM`): the kernel pauses an `open()` and malscan
+allows or **denies** it before the process gets the file.
+
+```bash
+sudo python -m malscan monitor / --backend fanotify          # block malicious opens
+sudo python -m malscan monitor / --backend fanotify --block-suspicious
+```
+
+Requires **Linux + root** (`CAP_SYS_ADMIN`). The default `--backend poll` is used
+everywhere else.
+
+> **Status: experimental / unverified.** This backend was authored on a non-Linux
+> host. Its testable logic (event parsing, allow/deny policy) is unit-tested, but
+> the kernel-syscall path has **not yet been validated on a live Linux system** —
+> test it in a throwaway VM before trusting it (a deny policy can block file
+> opens system-wide). It ships on a feature branch, not in a tagged release,
+> until verified.
+
 ## Web dashboard
 
 A themed Flask UI to scan paths, view verdicts, and manage quarantine.
