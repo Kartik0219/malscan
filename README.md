@@ -391,6 +391,31 @@ It is **opt-in** and only writes when enabled, so the core and the public web de
 stay stateless. This is the honest, single-host slice of cloud reputation — the
 *mechanism* (prevalence-based suspicion), scoped to what one machine can know.
 
+## Dynamic analysis (experimental)
+
+Static engines judge a file by what it *is*; dynamic analysis judges it by what
+it *does*. `malscan detonate` runs a sample inside a **hardened, network-isolated
+Docker container** under `strace` and turns the observed syscalls — outbound
+connections, file writes, child processes, anti-debug `ptrace` — into a
+behavioural verdict.
+
+```bash
+python -m malscan detonate sample.bin            # DRY RUN: prints the sandbox command only
+python -m malscan detonate sample.bin --confirm  # actually execute (disposable VM only!)
+```
+
+Safety is the whole design: it **never runs on the host** — only via `docker run`
+with `--network none`, a read-only root filesystem, `--cap-drop ALL` (bar the one
+`SYS_PTRACE` strace needs), `--security-opt no-new-privileges`, a non-root user,
+and memory/pid/time limits, with the sample mounted read-only. It defaults to a
+**dry run** that only prints the command; you must pass `--confirm` to execute.
+
+> **Status: experimental / unverified.** Authored on a host without Docker, so the
+> live detonation path has **not been executed here**. The command builder and the
+> strace behaviour parser are unit-tested; the `docker run` path needs validating
+> on a Docker host with throwaway Linux (ELF) samples in a disposable VM. Ships on
+> a feature branch, not in a release.
+
 ## AI triage (optional)
 
 Have Claude turn malscan's findings into a plain-English analyst writeup —

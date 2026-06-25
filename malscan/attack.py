@@ -30,6 +30,7 @@ TECHNIQUES: dict[str, "Technique"] = {
     "T1056.001": Technique("T1056.001", "Keylogging", "Collection"),
     "T1059":     Technique("T1059", "Command and Scripting Interpreter", "Execution"),
     "T1059.001": Technique("T1059.001", "PowerShell", "Execution"),
+    "T1071":     Technique("T1071", "Application Layer Protocol", "Command and Control"),
     "T1105":     Technique("T1105", "Ingress Tool Transfer", "Command and Control"),
     "T1622":     Technique("T1622", "Debugger Evasion", "Defense Evasion"),
 }
